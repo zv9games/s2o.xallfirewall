@@ -1,0 +1,11 @@
+C:\S2O\xallfirewall-0.7.2\target\debug\deps\libegui_winit-5c23b993cd976ef9.rmeta: C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\lib.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\clipboard.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\screen_reader.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\window_settings.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\epi.rs
+
+C:\S2O\xallfirewall-0.7.2\target\debug\deps\libegui_winit-5c23b993cd976ef9.rlib: C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\lib.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\clipboard.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\screen_reader.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\window_settings.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\epi.rs
+
+C:\S2O\xallfirewall-0.7.2\target\debug\deps\egui_winit-5c23b993cd976ef9.d: C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\lib.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\clipboard.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\screen_reader.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\window_settings.rs C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\epi.rs
+
+C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\lib.rs:
+C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\clipboard.rs:
+C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\screen_reader.rs:
+C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\window_settings.rs:
+C:\Users\grego\.cargo\registry\src\index.crates.io-6f17d22bba15001f\egui-winit-0.17.0\src\epi.rs:
