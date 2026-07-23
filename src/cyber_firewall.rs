@@ -128,11 +128,16 @@ impl CyberFirewallApp {
                 CyberNode::new(p4_2, 110.0, "SETTINGS", "3. DEFENDER"),
                 CyberNode::new(p4_3, 110.0, "EXIT", "4. CLOSE APP"),
             ],
-            MenuState::BasicMenu => vec![
-                CyberNode::new(p3_0, 110.0, "FIREWALL", "1. WFP CTL"),
-                CyberNode::new(p3_1, 110.0, "NETWORK", "2. TELEMETRY"),
-                CyberNode::new(p3_2, 110.0, "BACK <<", "3. MAIN MENU"),
-            ],
+            MenuState::BasicMenu => {
+                let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
+                let mut fw_node = CyberNode::new(p3_0, 110.0, "FIREWALL", "1. WFP CTL");
+                fw_node.state = fw_enabled;
+
+                let net_node = CyberNode::new(p3_1, 110.0, "NETWORK", "2. TELEMETRY");
+                let back_node = CyberNode::new(p3_2, 110.0, "BACK <<", "3. MAIN MENU");
+
+                vec![fw_node, net_node, back_node]
+            },
             MenuState::BasicFirewallMenu => {
                 let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
                 let shield_active = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(false);
@@ -152,12 +157,17 @@ impl CyberFirewallApp {
                 CyberNode::new(p3_1, 110.0, "SOCKET SCAN", "2. IP HELPER"),
                 CyberNode::new(p3_2, 110.0, "BACK <<", "3. BASIC MENU"),
             ],
-            MenuState::AdvancedMenu => vec![
-                CyberNode::new(p4_0, 110.0, "ADV FIREWALL", "1. AUDIT & RULES"),
-                CyberNode::new(p4_1, 110.0, "ADV NETWORK", "2. DEEP TELEMETRY"),
-                CyberNode::new(p4_2, 110.0, "DIAGNOSTICS", "3. SYS DIAG"),
-                CyberNode::new(p4_3, 110.0, "BACK <<", "4. MAIN MENU"),
-            ],
+            MenuState::AdvancedMenu => {
+                let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
+                let mut adv_fw_node = CyberNode::new(p4_0, 110.0, "ADV FIREWALL", "1. AUDIT & RULES");
+                adv_fw_node.state = fw_enabled;
+
+                let adv_net_node = CyberNode::new(p4_1, 110.0, "ADV NETWORK", "2. DEEP TELEMETRY");
+                let diag_node = CyberNode::new(p4_2, 110.0, "DIAGNOSTICS", "3. SYS DIAG");
+                let back_node = CyberNode::new(p4_3, 110.0, "BACK <<", "4. MAIN MENU");
+
+                vec![adv_fw_node, adv_net_node, diag_node, back_node]
+            },
             MenuState::AdvancedFirewallMenu => vec![
                 CyberNode::new(p4_0, 110.0, "SNAPSHOT", "1. RULE AUDIT"),
                 CyberNode::new(p4_1, 110.0, "RULE BUILDER", "2. CUSTOM RULE"),
