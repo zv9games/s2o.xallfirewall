@@ -106,8 +106,7 @@ impl CyberNode {
         laser_rect.intersects(node_rect)
     }
 
-    pub fn toggle(&mut self) {
-        self.state = !self.state;
+    pub fn register_hit(&mut self) {
         self.last_hit_time = Some(Instant::now());
     }
 

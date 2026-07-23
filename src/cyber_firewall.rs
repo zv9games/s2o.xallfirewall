@@ -506,7 +506,7 @@ impl epi::App for CyberFirewallApp {
                             continue;
                         }
 
-                        node.toggle();
+                        node.register_hit();
 
                         match (self.current_state, idx) {
                             // 1. MAIN MENU
@@ -555,14 +555,14 @@ impl epi::App for CyberFirewallApp {
 
                             // 3. BASIC FIREWALL MENU
                             (MenuState::BasicFirewallMenu, 0) => {
-                                let target_on = node.state;
+                                let target_on = !node.state;
                                 let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
-                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Toggle Request (Target: {})...", if target_on { "ENABLED" } else { "DISABLED" });
+                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicFirewallMenu, 1) => {
-                                let target_block = node.state;
+                                let target_block = !node.state;
                                 let _ = self.os_tx.send(OsCommand::ToggleShield(target_block));
-                                self.status_banner = format!("[SHIELD] Transmitting Outbound Isolation Request (Target: {})...", if target_block { "BLOCKED" } else { "ALLOW" });
+                                self.status_banner = format!("[SHIELD] Transmitting Outbound Isolation Request (Target: {})... Waiting for OS declaration...", if target_block { "BLOCKED" } else { "ALLOW" });
                             }
                             (MenuState::BasicFirewallMenu, 2) => {
                                 self.current_state = MenuState::BasicMenu;
@@ -647,9 +647,9 @@ impl epi::App for CyberFirewallApp {
 
                             // 8. SETTINGS MENU
                             (MenuState::SettingsMenu, 0) => {
-                                let target_on = node.state;
+                                let target_on = !node.state;
                                 let _ = self.os_tx.send(OsCommand::ToggleDefender(target_on));
-                                self.status_banner = "[DEFENDER ENGINE] Querying Real-Time Defender Status...".to_string();
+                                self.status_banner = "[DEFENDER ENGINE] Querying Real-Time Defender Status... Waiting for OS declaration...".to_string();
                             }
                             (MenuState::SettingsMenu, 1) => {
                                 std::thread::spawn(|| {
