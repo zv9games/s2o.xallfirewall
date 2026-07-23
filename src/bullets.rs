@@ -12,7 +12,7 @@ impl Bullet {
         Self {
             position: start_position,
             y: start_y,
-            speed: 10.0,
+            speed: 2.5,
             color,  // Initialize the color
         }
     }

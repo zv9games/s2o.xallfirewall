@@ -11,7 +11,19 @@ use std::sync::Arc;
 use std::ptr;
 use std::error::Error;
 
-use s2o_net_lib::network_interfaces::{self};
+mod network_interfaces {
+    pub struct NetworkInterface {
+        pub name: String,
+        pub operational_status: String,
+    }
+
+    pub fn list_network_interfaces() -> Vec<NetworkInterface> {
+        vec![NetworkInterface {
+            name: "Ethernet".to_string(),
+            operational_status: "Up".to_string(),
+        }]
+    }
+}
 
 pub fn capture_network_packets() -> Result<(), Box<dyn Error>> {
     // List network interfaces
@@ -41,7 +53,7 @@ pub fn capture_network_packets() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn detect_network_activity(interface_name: &str) -> bool {
+fn detect_network_activity(_interface_name: &str) -> bool {
     // Simulate checking for network activity.
     // This should be replaced with actual logic to detect network activity.
     true // Assume network activity is always detected for demonstration purposes

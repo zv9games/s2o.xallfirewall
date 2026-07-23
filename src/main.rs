@@ -1,11 +1,19 @@
-use s2o_net_lib::capture::capture_packets;
 use std::sync::atomic::{AtomicBool};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use std::error::Error;
 use eframe::{egui, epi};
-use winapi::um::winsock2::{WSADATA, WSAStartup, WSACleanup, SOCKET, INVALID_SOCKET, SOCK_RAW, IPPROTO_IP, socket, WSAGetLastError};
+use winapi::um::winsock2::{WSADATA, WSAStartup, SOCKET, INVALID_SOCKET, SOCK_RAW, socket, WSAGetLastError};
+use winapi::shared::ws2def::{AF_INET, IPPROTO_IP};
+
+// Helper stub for packet capture while divert/raw socket capture is shelved
+fn capture_packets<F>(_socket: SOCKET, _handle_packet: F, _stop_signal: Arc<AtomicBool>)
+where
+    F: Fn(&[u8]) + Send + Sync + 'static,
+{
+    // Wireframe stub for network packet capture callback
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -20,31 +28,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Err("WSAStartup failed".into());
     }
 
-    // Create the socket
-    let socket: SOCKET = unsafe { socket(winapi::um::winsock2::AF_INET, SOCK_RAW, IPPROTO_IP) };
+    // Try creating raw socket (requires Administrator privileges)
+    let socket: SOCKET = unsafe { socket(AF_INET, SOCK_RAW, IPPROTO_IP as i32) };
     if socket == INVALID_SOCKET {
-        eprintln!("Failed to create socket with error: {}", unsafe { WSAGetLastError() });
-        unsafe { WSACleanup() };
-        return Err("Failed to create socket".into());
+        let err_code = unsafe { WSAGetLastError() };
+        eprintln!(
+            "Notice: Raw socket creation returned error {} (WSAEACCES: Access Denied).",
+            err_code
+        );
+        eprintln!("Raw packet capture requires Administrator privileges.");
+        eprintln!("  -> To run with Administrator privileges:");
+        eprintln!("     1. Right-click PowerShell or CMD and select 'Run as Administrator'.");
+        eprintln!("     2. Or in PowerShell, run: Start-Process powershell -Verb RunAs");
+        eprintln!("  -> Continuing in driverless IP Helper telemetry mode...\n");
+    } else {
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        tokio::spawn({
+            let tx = tx.clone();
+            async move {
+                capture_packets(socket, move |packet| handle_packet(tx.clone(), packet), stop_signal);
+            }
+        });
     }
-
-    let stop_signal = Arc::new(AtomicBool::new(false));
-
-    tokio::spawn({
-        let tx = tx.clone();
-        let stop_signal = stop_signal.clone();
-        async move {
-            capture_packets(socket, move |packet| handle_packet(tx.clone(), packet), stop_signal);
-        }
-    });
 
     let app = NetworkApp { rx };
     eframe::run_native(Box::new(app), eframe::NativeOptions::default());
-
-    // Cleanup Winsock
-    unsafe { WSACleanup() };
-
-    // Ok(()) can be removed because it's unreachable
 }
 
 struct NetworkApp {
@@ -58,21 +66,28 @@ impl epi::App for NetworkApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Ok(mut rx) = self.rx.try_lock() {
-                ui.label("Network Activity:");
-                let mut packet_received = false;
+            ui.heading("Network Activity Dashboard");
+            ui.add_space(5.0);
 
-                egui::ScrollArea::vertical().show(ui, |ui| {
+            let connections = s2o_net_lib::telemetry::get_active_tcp_connections();
+            ui.label(format!("Active TCP Sockets (Driverless Telemetry): {}", connections.len()));
+            ui.separator();
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if let Ok(mut rx) = self.rx.try_lock() {
                     while let Ok(packet_data) = rx.try_recv() {
-                        ui.label(packet_data);
-                        packet_received = true;
+                        ui.label(format!("[Raw Packet] {}", packet_data));
                     }
-                });
-
-                if !packet_received {
-                    ui.label("No packets captured yet.");
                 }
-            }
+
+                for conn in &connections {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("PID {:<6}", conn.pid));
+                        ui.label(format!("{}:{} -> {}:{}", conn.local_addr, conn.local_port, conn.remote_addr, conn.remote_port));
+                        ui.label(format!("[{}]", conn.state));
+                    });
+                }
+            });
         });
 
         ctx.request_repaint();

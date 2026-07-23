@@ -15,6 +15,13 @@ fn main() {
     );
 }
 
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum MenuLevel {
+    Level1Firewall,
+    Level2Defender,
+    Level3Telemetry,
+}
+
 struct PlatformApp {
     // Adjustable parameters
     top_text: String,
@@ -27,7 +34,7 @@ struct PlatformApp {
     bottom_text_size: f32,
     bottom_text_v_offset: f32,
 
-    bullet_v_offset: f32,  // Adjustable parameter for bullet vertical position
+    bullet_v_offset: f32,
 
     // Christmas tree parameters
     tree_base_x: f32,
@@ -45,7 +52,11 @@ struct PlatformApp {
     ship: Ship,
     bullets: Vec<Bullet>,
     targets: Vec<Target>,
-    shooting: bool, // Track if the ship is currently shooting
+    shooting: bool,
+
+    // Menu level & status feedback
+    current_level: MenuLevel,
+    status_message: String,
 
     // Blinking state
     blinking: bool,
@@ -61,55 +72,74 @@ struct PlatformApp {
     current_color_index: usize,
 }
 
+impl PlatformApp {
+    fn load_targets_for_level(level: MenuLevel) -> Vec<Target> {
+        match level {
+            MenuLevel::Level1Firewall => vec![
+                Target::new(150.0, 100.0, "MASTER FW"),
+                Target::new(400.0, 100.0, "SHIELD MODE"),
+                Target::new(650.0, 100.0, "NEXT LVL >>"),
+            ],
+            MenuLevel::Level2Defender => vec![
+                Target::new(150.0, 100.0, "QUICK SCAN"),
+                Target::new(400.0, 100.0, "UPDATE DEFS"),
+                Target::new(650.0, 100.0, "NEXT LVL >>"),
+            ],
+            MenuLevel::Level3Telemetry => vec![
+                Target::new(150.0, 100.0, "ADAPTERS"),
+                Target::new(400.0, 100.0, "SOCKETS"),
+                Target::new(650.0, 100.0, "LVL 1 ↺"),
+            ],
+        }
+    }
+}
+
 impl Default for PlatformApp {
     fn default() -> Self {
-        let screen_width = 800.0;  // Adjust the screen width as needed
+        let screen_width = 800.0;
         Self {
-            top_text: "POWERED BY SPLIT2OPS SOFTWARE".to_string(),
+            top_text: "LEVEL 1: FIREWALL MASTER CONTROL".to_string(),
             top_text_color: egui::Color32::WHITE,
-            top_text_size: 20.0,
+            top_text_size: 22.0,
             top_text_v_offset: 10.0,
 
-            bottom_text: "XALLFIREWALL".to_string(),
+            bottom_text: "XALLFIREWALL ARCADE".to_string(),
             bottom_text_color: egui::Color32::GREEN,
-            bottom_text_size: 120.0,
+            bottom_text_size: 60.0,
             bottom_text_v_offset: 10.0,
 
-            bullet_v_offset: 80.0,  // Set default vertical offset for bullets
+            bullet_v_offset: 80.0,
 
-            // Initialize Christmas tree parameters
             tree_base_x: 390.0,
             tree_base_y: 245.0,
             trunk_height: 100.0,
             trunk_width: 40.0,
 
-            // Initialize star and squares parameters
             star_x: 390.0,
             star_y: 190.0,
             star_size: 20.0,
             square_offset: 24.0,
 
-            // Initialize game elements
             ship: Ship::new(screen_width),
             bullets: Vec::new(),
-            targets: vec![
-                Target::new(150.0, 100.0),
-                Target::new(400.0, 100.0),
-                Target::new(650.0, 100.0),
-            ],
-            shooting: false, // Initialize shooting as false
+            targets: Self::load_targets_for_level(MenuLevel::Level1Firewall),
+            shooting: false,
 
-            // Initialize blinking state
+            current_level: MenuLevel::Level1Firewall,
+            status_message: "Use Left/Right Arrows to move, Space to shoot target switches!".to_string(),
+
             blinking: false,
             blink_timer: Instant::now(),
             blink_interval: Duration::from_millis(250),
 
-            // Initialize text states for switches
             show_merry: false,
             show_christmas: false,
 
-            // Initialize blinking colors
-            blinking_colors: vec![egui::Color32::from_rgb(255, 0, 0), egui::Color32::from_rgb(255, 255, 255), egui::Color32::from_rgb(0, 0, 255)],
+            blinking_colors: vec![
+                egui::Color32::from_rgb(255, 0, 0),
+                egui::Color32::from_rgb(255, 255, 255),
+                egui::Color32::from_rgb(0, 0, 255),
+            ],
             current_color_index: 0,
         }
     }
@@ -117,118 +147,138 @@ impl Default for PlatformApp {
 
 impl epi::App for PlatformApp {
     fn name(&self) -> &str {
-        "Platform"
+        "XAllFirewall Arcade Platform"
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        // Set the visuals to have a black background
         let visuals = egui::Visuals {
             dark_mode: true,
             ..Default::default()
         };
         ctx.set_visuals(visuals);
 
-        let input = ctx.input().clone(); // Clone the input to avoid conflicts
-
-        // Handle movement independently
+        let input = ctx.input().clone();
         self.ship.update(&input);
 
-        // Get the bottom coordinate from the UI context
         let bottom = ctx.available_rect().bottom();
 
-        // Check for shooting key independently
         if input.key_pressed(egui::Key::Space) {
+            let bullet = self.ship.shoot(bottom, self.bullet_v_offset);
+            self.bullets.push(bullet);
             self.shooting = true;
-        } else if input.key_released(egui::Key::Space) {
+        } else {
             self.shooting = false;
         }
 
-        if self.shooting {
-            let fired_bullet = self.ship.shoot(bottom, self.bullet_v_offset);
-            self.bullets.push(fired_bullet);
-        }
-
-        // Create a central panel with customized labels and game elements
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Render Christmas tree
             self.render_christmas_tree(ui);
 
-            // Add space at the top for the top text
             ui.vertical_centered_justified(|ui| {
                 ui.add_space(self.top_text_v_offset);
                 ui.label(egui::RichText::new(&self.top_text).color(self.top_text_color).size(self.top_text_size));
+                ui.label(egui::RichText::new(&self.status_message).color(egui::Color32::YELLOW).size(14.0));
             });
 
-            // Add space at the bottom for the bottom text
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                 ui.add_space(self.bottom_text_v_offset);
                 ui.label(egui::RichText::new(&self.bottom_text).color(self.bottom_text_color).size(self.bottom_text_size));
             });
 
-            // Fill the rest of the space with black background
             ui.add_space(ui.available_height());
 
-            // Update and render bullets
             for bullet in &mut self.bullets {
                 bullet.update();
                 bullet.render(ui);
             }
 
-            // Update and render targets
-            for (i, target) in self.targets.iter_mut().enumerate() {
+            for target in self.targets.iter_mut() {
                 target.update();
                 target.render(ui);
-
-                // Check if the first or third target is hit to show text
-                if i == 0 && target.state {
-                    self.show_merry = true;
-                }
-                if i == 1 && target.state {
-                    self.blinking = true;
-                }
-                if i == 2 && target.state {
-                    self.show_christmas = true;
-                }
             }
 
-            // Render ship
             self.ship.render(ui);
 
-            // Check for bullet-target collisions
+            let mut level_changed = false;
+
             for bullet in &self.bullets {
-                for target in &mut self.targets {
+                for (i, target) in self.targets.iter_mut().enumerate() {
                     if target.check_collision(bullet) && target.can_toggle() {
                         target.toggle();
+                        match (self.current_level, i) {
+                            // LEVEL 1: FIREWALL CONTROL
+                            (MenuLevel::Level1Firewall, 0) => {
+                                if target.state {
+                                    let _ = s2o_net_lib::firewall::FirewallController::enable_firewall();
+                                    self.status_message = "Action: Enabled Windows Firewall".to_string();
+                                } else {
+                                    let _ = s2o_net_lib::firewall::FirewallController::disable_firewall();
+                                    self.status_message = "Action: Disabled Windows Firewall".to_string();
+                                }
+                            }
+                            (MenuLevel::Level1Firewall, 1) => {
+                                if target.state {
+                                    let _ = s2o_net_lib::firewall::FirewallController::airplane_mode_enable();
+                                    self.status_message = "Action: Enabled Shield Mode (Outbound Blocked)".to_string();
+                                } else {
+                                    let _ = s2o_net_lib::firewall::FirewallController::airplane_mode_disable();
+                                    self.status_message = "Action: Disabled Shield Mode".to_string();
+                                }
+                            }
+                            (MenuLevel::Level1Firewall, 2) => {
+                                self.current_level = MenuLevel::Level2Defender;
+                                self.top_text = "LEVEL 2: WINDOWS DEFENDER CONTROL".to_string();
+                                self.status_message = "Advanced to Level 2: Windows Defender".to_string();
+                                level_changed = true;
+                            }
+
+                            // LEVEL 2: DEFENDER CONTROL
+                            (MenuLevel::Level2Defender, 0) => {
+                                std::thread::spawn(|| {
+                                    let _ = s2o_net_lib::defender::DefenderController::run_scan_native();
+                                });
+                                self.status_message = "Action: Triggered Defender Quick Scan".to_string();
+                            }
+                            (MenuLevel::Level2Defender, 1) => {
+                                std::thread::spawn(|| {
+                                    let _ = s2o_net_lib::defender::DefenderController::update_defender_native();
+                                });
+                                self.status_message = "Action: Triggered Defender Signature Update".to_string();
+                            }
+                            (MenuLevel::Level2Defender, 2) => {
+                                self.current_level = MenuLevel::Level3Telemetry;
+                                self.top_text = "LEVEL 3: ADAPTERS & TELEMETRY".to_string();
+                                self.status_message = "Advanced to Level 3: Telemetry & Adapters".to_string();
+                                level_changed = true;
+                            }
+
+                            // LEVEL 3: TELEMETRY & ADAPTERS
+                            (MenuLevel::Level3Telemetry, 0) => {
+                                s2o_net_lib::util2::show_active_adapters();
+                                self.status_message = "Action: Listed Active Adapters in Console".to_string();
+                            }
+                            (MenuLevel::Level3Telemetry, 1) => {
+                                let conns = s2o_net_lib::telemetry::get_active_tcp_connections();
+                                self.status_message = format!("Action: Scanned {} Active TCP Sockets", conns.len());
+                            }
+                            (MenuLevel::Level3Telemetry, 2) => {
+                                self.current_level = MenuLevel::Level1Firewall;
+                                self.top_text = "LEVEL 1: FIREWALL MASTER CONTROL".to_string();
+                                self.status_message = "Returned to Level 1: Firewall Control".to_string();
+                                level_changed = true;
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }
 
-            // Render Merry and Christmas texts based on switch states
-            if self.show_merry {
-                ui.painter().text(
-                    egui::pos2(self.tree_base_x - 250.0, self.tree_base_y),
-                    egui::Align2::LEFT_CENTER,
-                    "Merry",
-                    egui::FontId::proportional(80.0),
-                    egui::Color32::RED,
-                );
-            }
-
-            if self.show_christmas {
-                ui.painter().text(
-                    egui::pos2(self.tree_base_x + 350.0, self.tree_base_y),
-                    egui::Align2::RIGHT_CENTER,
-                    "Christmas",
-                    egui::FontId::proportional(80.0),
-                    egui::Color32::RED,
-                );
+            if level_changed {
+                self.targets = Self::load_targets_for_level(self.current_level);
             }
         });
 
-        // Control FPS by limiting frame rate
         ctx.request_repaint();
 
-        // Update blinking state and colors
         if self.blinking {
             if self.blink_timer.elapsed() >= self.blink_interval {
                 self.blink_timer = Instant::now();
@@ -240,10 +290,9 @@ impl epi::App for PlatformApp {
 
 impl PlatformApp {
     fn render_christmas_tree(&self, ui: &mut egui::Ui) {
-        let tree_base_color = egui::Color32::from_rgb(34, 139, 34); // Forest Green
-        let base_decoration_color = egui::Color32::from_rgb(255, 0, 0); // Red as the default decoration color
+        let tree_base_color = egui::Color32::from_rgb(34, 139, 34);
+        let base_decoration_color = egui::Color32::from_rgb(255, 0, 0);
 
-        // Draw tree layers
         for i in (0..5).rev() {
             let width = 200.0 - 30.0 * i as f32;
             let height = 40.0;
@@ -257,7 +306,6 @@ impl PlatformApp {
                 tree_base_color,
             );
 
-            // Draw decorations
             for j in 0..4 {
                 let decoration_color = if self.blinking {
                     self.blinking_colors[self.current_color_index]
@@ -273,27 +321,24 @@ impl PlatformApp {
             }
         }
 
-        // Draw the tree trunk
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
                 egui::pos2(self.tree_base_x - self.trunk_width / 2.0, self.tree_base_y + 200.0),
                 egui::vec2(self.trunk_width, self.trunk_height),
             ),
             0.0,
-            egui::Color32::from_rgb(139, 69, 19), // Saddle Brown
+            egui::Color32::from_rgb(139, 69, 19),
         );
 
-        // Draw the star on top
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
                 egui::pos2(self.star_x - self.star_size / 2.0, self.star_y - self.star_size / 2.0),
                 egui::vec2(self.star_size, self.star_size),
             ),
             0.0,
-            egui::Color32::WHITE, // White star
+            egui::Color32::WHITE,
         );
 
-        // Add squares around the star
         let star_coords = [
             (self.star_x - self.square_offset, self.star_y - self.square_offset),
             (self.star_x + self.square_offset, self.star_y - self.square_offset),
@@ -307,7 +352,7 @@ impl PlatformApp {
                     egui::vec2(10.0, 10.0),
                 ),
                 0.0,
-                egui::Color32::WHITE, // White squares around the star
+                egui::Color32::WHITE,
             );
         }
     }

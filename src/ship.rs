@@ -12,7 +12,7 @@ impl Ship {
     pub fn new(screen_width: f32) -> Self {
         Self {
             position: screen_width / 2.0 - 25.0,  // Center the ship horizontally
-            speed: 15.0,
+            speed: 2.5,
             width: 50.0,
             height: 60.0,
         }
