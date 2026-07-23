@@ -382,10 +382,14 @@ impl epi::App for CyberFirewallApp {
 
         let bottom = available_rect.bottom();
 
-        // Handle plasma laser firing
+        // Handle plasma laser firing (locked out while OS Sync is in progress)
         if input.key_pressed(egui::Key::Space) {
-            let laser = self.ship.shoot(bottom);
-            self.lasers.push(laser);
+            if !self.os_sync_ready {
+                self.status_banner = "[FIRE TRIGGER LOCKED] OS Sync in progress... Wait for [OS SYNC: YES]!".to_string();
+            } else {
+                let laser = self.ship.shoot(bottom);
+                self.lasers.push(laser);
+            }
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -504,12 +508,12 @@ impl epi::App for CyberFirewallApp {
 
             // Collision Detection & Real Backend Execution
             let mut state_transition = false;
-            let mut hit_laser_index: Option<usize> = None;
+            let mut hit_laser_indices = std::collections::HashSet::new();
 
             for (l_idx, laser) in self.lasers.iter().enumerate() {
                 for (idx, node) in self.nodes.iter_mut().enumerate() {
                     if node.check_collision(laser) {
-                        hit_laser_index = Some(l_idx);
+                        hit_laser_indices.insert(l_idx);
 
                         if !node.can_toggle() {
                             continue;
@@ -695,10 +699,13 @@ impl epi::App for CyberFirewallApp {
                 }
             }
 
-            if let Some(l_idx) = hit_laser_index {
-                if l_idx < self.lasers.len() {
-                    self.lasers.remove(l_idx);
-                }
+            if !hit_laser_indices.is_empty() {
+                let mut l_idx = 0;
+                self.lasers.retain(|_| {
+                    let hit = hit_laser_indices.contains(&l_idx);
+                    l_idx += 1;
+                    !hit
+                });
             }
 
             if state_transition {
