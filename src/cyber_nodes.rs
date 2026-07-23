@@ -25,7 +25,7 @@ impl CyberNode {
             label: label.into(),
             sub_label: sub_label.into(),
             last_hit_time: None,
-            cooldown: Duration::from_millis(150), // 150ms rapid fire arcade responsiveness
+            cooldown: Duration::from_millis(50), // 50ms instant zero-lag hit registration
         }
     }
 

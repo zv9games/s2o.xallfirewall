@@ -27,30 +27,23 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
 
     std::thread::spawn(move || {
         while let Ok(mut cmd) = cmd_rx.recv() {
-            // State Coalescing: Collapse rapid-fire commands to execute ONLY the final hit target state
+            // Rapid-Fire State Coalescing: Collapse rapid-fire commands to execute ONLY the final hit target state
             while let Ok(next_cmd) = cmd_rx.try_recv() {
                 cmd = next_cmd;
             }
 
             match cmd {
                 OsCommand::ToggleFirewall(target_on) => {
-                    println!("[OS WORKER COALESCED] Executing final target state: ToggleFirewall(target_on={})", target_on);
+                    println!("[OS LINKAGE] Instant COM mutation: ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
                     } else {
                         s2o_net_lib::firewall::FirewallController::disable_firewall()
                     };
 
-                    // Initial Verification Query
-                    let mut live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
-
-                    // Double-Check Verification Delay (100ms) to ensure Windows BFE service has committed change
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    if let Ok(double_check) = s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
-                        live_enabled = double_check;
-                    }
-
-                    println!("[OS WORKER DOUBLE-CHECKED] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
+                    // Instant Live OS Kernel Re-Query across all profiles (Private, Public, Domain)
+                    let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                    println!("[OS LINKAGE VERIFIED] Firewall COM result: {:?}, Live OS status: {}", result, live_enabled);
 
                     let banner = match result {
                         Ok(_) => format!("[WFP ENGINE] Windows Firewall verified live: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
@@ -60,22 +53,16 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
                 }
                 OsCommand::ToggleShield(target_block) => {
-                    println!("[OS WORKER COALESCED] Executing final target state: ToggleShield(target_block={})", target_block);
+                    println!("[OS LINKAGE] Instant COM mutation: ToggleShield(target_block={})", target_block);
                     let result = if target_block {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
                     } else {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
                     };
 
-                    let mut live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
-
-                    // Double-Check Verification Delay (100ms)
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    if let Ok(double_check) = s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
-                        live_blocked = double_check;
-                    }
-
-                    println!("[OS WORKER DOUBLE-CHECKED] Shield COM result: {:?}, Verified live OS state: {}", result, live_blocked);
+                    // Instant Live OS Kernel Re-Query
+                    let live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                    println!("[OS LINKAGE VERIFIED] Shield COM result: {:?}, Live OS status: {}", result, live_blocked);
 
                     let banner = match result {
                         Ok(_) => format!("[SHIELD] Outbound isolation verified live: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
@@ -86,7 +73,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                 }
                 OsCommand::ToggleDefender(_) => {
                     let live_active = s2o_net_lib::defender::DefenderController::is_defender_active();
-                    println!("[OS WORKER DOUBLE-CHECKED] Defender service verified live: {}", live_active);
+                    println!("[OS LINKAGE VERIFIED] Defender service verified live: {}", live_active);
                     let banner = format!("[DEFENDER ENGINE] Real-Time Defender Status: {}", if live_active { "RUNNING (Green)" } else { "STOPPED (Red)" });
                     let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
                 }
