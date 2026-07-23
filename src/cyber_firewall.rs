@@ -169,11 +169,17 @@ impl CyberFirewallApp {
                 CyberNode::new(p3_1, 110.0, "PROMISCUOUS", "2. WIREFRAME TEST"),
                 CyberNode::new(p3_2, 110.0, "BACK <<", "3. ADV MENU"),
             ],
-            MenuState::SettingsMenu => vec![
-                CyberNode::new(p3_0, 110.0, "QUICK SCAN", "1. DEFENDER SCAN"),
-                CyberNode::new(p3_1, 110.0, "UPDATE DEFS", "2. SIGNATURES"),
-                CyberNode::new(p3_2, 110.0, "BACK <<", "3. MAIN MENU"),
-            ],
+            MenuState::SettingsMenu => {
+                let defender_active = s2o_net_lib::defender::DefenderController::is_defender_active();
+                let mut def_node = CyberNode::new(p4_0, 110.0, "DEFENDER", "1. REALTIME SVC");
+                def_node.state = defender_active;
+
+                let scan_node = CyberNode::new(p4_1, 110.0, "QUICK SCAN", "2. SCAN THREATS");
+                let update_node = CyberNode::new(p4_2, 110.0, "UPDATE DEFS", "3. SIGNATURES");
+                let back_node = CyberNode::new(p4_3, 110.0, "BACK <<", "4. MAIN MENU");
+
+                vec![def_node, scan_node, update_node, back_node]
+            },
         }
     }
 }
@@ -556,18 +562,27 @@ impl epi::App for CyberFirewallApp {
 
                             // 8. SETTINGS MENU
                             (MenuState::SettingsMenu, 0) => {
+                                let live_status = s2o_net_lib::defender::DefenderController::is_defender_active();
+                                node.state = live_status;
+                                if live_status {
+                                    self.status_banner = "[DEFENDER ENGINE] Real-Time Defender Service is RUNNING (Green)".to_string();
+                                } else {
+                                    self.status_banner = "[DEFENDER ENGINE] Real-Time Defender Service is STOPPED (Red)".to_string();
+                                }
+                            }
+                            (MenuState::SettingsMenu, 1) => {
                                 std::thread::spawn(|| {
                                     let _ = s2o_net_lib::defender::DefenderController::run_scan_native();
                                 });
                                 self.status_banner = "[SETTINGS] Neural Defender Quick Scan Spawned".to_string();
                             }
-                            (MenuState::SettingsMenu, 1) => {
+                            (MenuState::SettingsMenu, 2) => {
                                 std::thread::spawn(|| {
                                     let _ = s2o_net_lib::defender::DefenderController::update_defender_native();
                                 });
                                 self.status_banner = "[SETTINGS] Defender Signature Update Spawned".to_string();
                             }
-                            (MenuState::SettingsMenu, 2) => {
+                            (MenuState::SettingsMenu, 3) => {
                                 self.current_state = MenuState::MainMenu;
                                 self.level_title = "MAIN MENU".to_string();
                                 self.status_banner = "Returned to Main Menu.".to_string();
