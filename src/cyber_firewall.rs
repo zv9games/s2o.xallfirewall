@@ -178,6 +178,7 @@ struct CyberFirewallApp {
 
     os_tx: Sender<OsCommand>,
     os_rx: Receiver<OsStatusEvent>,
+    os_sync_ready: bool,
 
     fonts_loaded: bool,
     level_flash_timer: Option<Instant>,
@@ -290,6 +291,7 @@ impl Default for CyberFirewallApp {
 
             os_tx,
             os_rx,
+            os_sync_ready: true,
 
             fonts_loaded: false,
             level_flash_timer: None,
@@ -309,6 +311,7 @@ impl epi::App for CyberFirewallApp {
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
         // Drain any incoming verified live OS status events from the async worker channel
         while let Ok(event) = self.os_rx.try_recv() {
+            self.os_sync_ready = true;
             match event {
                 OsStatusEvent::FirewallStatus { enabled, banner } => {
                     self.status_banner = banner;
@@ -458,11 +461,17 @@ impl epi::App for CyberFirewallApp {
                                     .strong(),
                             );
 
-                            // Active Sub-Menu Level Tag
+                            // Active Sub-Menu Level & Live OS Status Ticker Tag
+                            let (ticker_text, ticker_color) = if self.os_sync_ready {
+                                ("[OS SYNC: YES]", egui::Color32::from_rgb(0, 255, 180))
+                            } else {
+                                ("[OS SYNC: IN PROGRESS...]", egui::Color32::from_rgb(255, 200, 40))
+                            };
+
                             ui.label(
-                                egui::RichText::new(&format!(" :: {}", self.level_title))
-                                    .color(egui::Color32::from_rgb(0, 230, 255))
-                                    .size(17.0)
+                                egui::RichText::new(&format!(" :: {}  {}", self.level_title, ticker_text))
+                                    .color(ticker_color)
+                                    .size(16.0)
                                     .strong(),
                             );
                         });
@@ -504,6 +513,17 @@ impl epi::App for CyberFirewallApp {
 
                         if !node.can_toggle() {
                             continue;
+                        }
+
+                        // Hardware Lockout: Toggles occur ONLY when OS sync flag is YES
+                        if (self.current_state == MenuState::BasicFirewallMenu && (idx == 0 || idx == 1))
+                            || (self.current_state == MenuState::SettingsMenu && idx == 0)
+                        {
+                            if !self.os_sync_ready {
+                                self.status_banner = "[OS SYNC IN PROGRESS] Toggle locked until OS completes declaration...".to_string();
+                                continue;
+                            }
+                            self.os_sync_ready = false;
                         }
 
                         node.register_hit();
