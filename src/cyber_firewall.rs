@@ -6,7 +6,69 @@ use eframe::{egui, epi};
 use cyber_kanji::MatrixRain;
 use cyber_ship::{CyberShip, CyberLaser};
 use cyber_nodes::CyberNode;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
+
+pub enum OsCommand {
+    ToggleFirewall(bool),
+    ToggleShield(bool),
+    ToggleDefender(bool),
+}
+
+pub enum OsStatusEvent {
+    FirewallStatus { enabled: bool, banner: String },
+    ShieldStatus { blocked: bool, banner: String },
+    DefenderStatus { active: bool, banner: String },
+}
+
+fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
+    let (cmd_tx, cmd_rx) = channel::<OsCommand>();
+    let (event_tx, event_rx) = channel::<OsStatusEvent>();
+
+    std::thread::spawn(move || {
+        while let Ok(cmd) = cmd_rx.recv() {
+            match cmd {
+                OsCommand::ToggleFirewall(target_on) => {
+                    let result = if target_on {
+                        s2o_net_lib::firewall::FirewallController::enable_firewall()
+                    } else {
+                        s2o_net_lib::firewall::FirewallController::disable_firewall()
+                    };
+
+                    let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                    let banner = match result {
+                        Ok(_) => format!("[WFP ENGINE] Windows Firewall synced live: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
+                        Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
+                    };
+
+                    let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
+                }
+                OsCommand::ToggleShield(target_block) => {
+                    let result = if target_block {
+                        s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
+                    } else {
+                        s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
+                    };
+
+                    let live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                    let banner = match result {
+                        Ok(_) => format!("[SHIELD] Outbound isolation synced live: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
+                        Err(e) => format!("[ADMIN REQUIRED] Shield error ({:?}). Live status: {}", e, if live_blocked { "BLOCKED" } else { "ALLOW" }),
+                    };
+
+                    let _ = event_tx.send(OsStatusEvent::ShieldStatus { blocked: live_blocked, banner });
+                }
+                OsCommand::ToggleDefender(_) => {
+                    let live_active = s2o_net_lib::defender::DefenderController::is_defender_active();
+                    let banner = format!("[DEFENDER ENGINE] Real-Time Defender Status: {}", if live_active { "RUNNING (Green)" } else { "STOPPED (Red)" });
+                    let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
+                }
+            }
+        }
+    });
+
+    (cmd_tx, event_rx)
+}
 
 fn load_window_config() -> Option<(f32, f32)> {
     if let Ok(content) = std::fs::read_to_string("window_config.json") {
@@ -99,6 +161,9 @@ struct CyberFirewallApp {
     current_state: MenuState,
     level_title: String,
     status_banner: String,
+
+    os_tx: Sender<OsCommand>,
+    os_rx: Receiver<OsStatusEvent>,
 
     fonts_loaded: bool,
     level_flash_timer: Option<Instant>,
@@ -197,6 +262,7 @@ impl CyberFirewallApp {
 impl Default for CyberFirewallApp {
     fn default() -> Self {
         let (width, height) = load_window_config().unwrap_or((800.0, 600.0));
+        let (os_tx, os_rx) = spawn_os_worker();
 
         Self {
             matrix_rain: MatrixRain::new(width, height),
@@ -207,6 +273,9 @@ impl Default for CyberFirewallApp {
             current_state: MenuState::MainMenu,
             level_title: "MAIN MENU".to_string(),
             status_banner: "MAIN MENU: Shoot targets [BASIC], [ADVANCED], [SETTINGS], or [EXIT]!".to_string(),
+
+            os_tx,
+            os_rx,
 
             fonts_loaded: false,
             level_flash_timer: None,
@@ -224,6 +293,36 @@ impl epi::App for CyberFirewallApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
+        // Drain any incoming verified live OS status events from the async worker channel
+        while let Ok(event) = self.os_rx.try_recv() {
+            match event {
+                OsStatusEvent::FirewallStatus { enabled, banner } => {
+                    self.status_banner = banner;
+                    for node in self.nodes.iter_mut() {
+                        if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
+                            node.state = enabled;
+                        }
+                    }
+                }
+                OsStatusEvent::ShieldStatus { blocked, banner } => {
+                    self.status_banner = banner;
+                    for node in self.nodes.iter_mut() {
+                        if node.label == "SHIELD" {
+                            node.state = blocked;
+                        }
+                    }
+                }
+                OsStatusEvent::DefenderStatus { active, banner } => {
+                    self.status_banner = banner;
+                    for node in self.nodes.iter_mut() {
+                        if node.label == "DEFENDER" {
+                            node.state = active;
+                        }
+                    }
+                }
+            }
+        }
+
         if !self.fonts_loaded {
             setup_custom_fonts(ctx);
             self.fonts_loaded = true;
@@ -440,60 +539,16 @@ impl epi::App for CyberFirewallApp {
 
                             // 3. BASIC FIREWALL MENU
                             (MenuState::BasicFirewallMenu, 0) => {
-                                let currently_on = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(!node.state);
-                                if currently_on {
-                                    match s2o_net_lib::firewall::FirewallController::disable_firewall() {
-                                        Ok(_) => {
-                                            node.state = false;
-                                            self.status_banner = "[WFP ENGINE] Windows Firewall Turned OFF (Red)".to_string();
-                                        }
-                                        Err(e) => {
-                                            let live = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
-                                            node.state = live;
-                                            self.status_banner = format!("[ADMIN REQUIRED] Could not turn off Firewall ({:?}). Run as Admin!", e);
-                                        }
-                                    }
-                                } else {
-                                    match s2o_net_lib::firewall::FirewallController::enable_firewall() {
-                                        Ok(_) => {
-                                            node.state = true;
-                                            self.status_banner = "[WFP ENGINE] Windows Firewall Turned ON (Green)".to_string();
-                                        }
-                                        Err(e) => {
-                                            let live = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(false);
-                                            node.state = live;
-                                            self.status_banner = format!("[ADMIN REQUIRED] Could not turn on Firewall ({:?}). Run as Admin!", e);
-                                        }
-                                    }
-                                }
+                                let target_on = !node.state;
+                                node.state = target_on;
+                                let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
+                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Toggle Request (Target: {})...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicFirewallMenu, 1) => {
-                                let currently_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(!node.state);
-                                if currently_blocked {
-                                    match s2o_net_lib::firewall::FirewallController::airplane_mode_disable() {
-                                        Ok(_) => {
-                                            node.state = false;
-                                            self.status_banner = "[SHIELD] Outbound Restored to ALLOW (Green)".to_string();
-                                        }
-                                        Err(e) => {
-                                            let live = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(true);
-                                            node.state = live;
-                                            self.status_banner = format!("[ADMIN REQUIRED] Could not restore outbound ({:?}). Run as Admin!", e);
-                                        }
-                                    }
-                                } else {
-                                    match s2o_net_lib::firewall::FirewallController::airplane_mode_enable() {
-                                        Ok(_) => {
-                                            node.state = true;
-                                            self.status_banner = "[SHIELD] Outbound Isolation ENABLED (Red)".to_string();
-                                        }
-                                        Err(e) => {
-                                            let live = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(false);
-                                            node.state = live;
-                                            self.status_banner = format!("[ADMIN REQUIRED] Could not isolate outbound ({:?}). Run as Admin!", e);
-                                        }
-                                    }
-                                }
+                                let target_block = !node.state;
+                                node.state = target_block;
+                                let _ = self.os_tx.send(OsCommand::ToggleShield(target_block));
+                                self.status_banner = format!("[SHIELD] Transmitting Outbound Isolation Request (Target: {})...", if target_block { "BLOCKED" } else { "ALLOW" });
                             }
                             (MenuState::BasicFirewallMenu, 2) => {
                                 self.current_state = MenuState::BasicMenu;
