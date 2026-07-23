@@ -219,6 +219,10 @@ struct CyberFirewallApp {
     level_title: String,
     status_banner: String,
 
+    cached_fw_enabled: bool,
+    cached_shield_blocked: bool,
+    cached_defender_active: bool,
+
     os_tx: Sender<OsCommand>,
     os_rx: Receiver<OsStatusEvent>,
     os_sync_ready: bool,
@@ -232,7 +236,7 @@ struct CyberFirewallApp {
 }
 
 impl CyberFirewallApp {
-    fn load_nodes_for_state(state: MenuState, screen_width: f32) -> Vec<CyberNode> {
+    fn load_nodes_for_state(state: MenuState, screen_width: f32, fw_enabled: bool, shield_blocked: bool, defender_active: bool) -> Vec<CyberNode> {
         let step4 = screen_width / 5.0;
         let p4_0 = step4 * 1.0 - 30.0;
         let p4_1 = step4 * 2.0 - 30.0;
@@ -252,7 +256,6 @@ impl CyberFirewallApp {
                 CyberNode::new(p4_3, 110.0, "EXIT", "4. CLOSE APP"),
             ],
             MenuState::BasicMenu => {
-                let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
                 let mut fw_node = CyberNode::new(p3_0, 110.0, "FIREWALL", "1. WFP CTL");
                 fw_node.state = fw_enabled;
 
@@ -262,14 +265,11 @@ impl CyberFirewallApp {
                 vec![fw_node, net_node, back_node]
             },
             MenuState::BasicFirewallMenu => {
-                let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
-                let shield_active = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(false);
-
                 let mut fw_node = CyberNode::new(p3_0, 110.0, "FIREWALL", "1. TOGGLE ON/OFF");
                 fw_node.state = fw_enabled;
 
                 let mut shield_node = CyberNode::new(p3_1, 110.0, "SHIELD", "2. OUTBOUND BLOCK");
-                shield_node.state = shield_active;
+                shield_node.state = shield_blocked;
 
                 let back_node = CyberNode::new(p3_2, 110.0, "BACK <<", "3. BASIC MENU");
 
@@ -281,7 +281,6 @@ impl CyberFirewallApp {
                 CyberNode::new(p3_2, 110.0, "BACK <<", "3. BASIC MENU"),
             ],
             MenuState::AdvancedMenu => {
-                let fw_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
                 let mut adv_fw_node = CyberNode::new(p4_0, 110.0, "ADV FIREWALL", "1. AUDIT & RULES");
                 adv_fw_node.state = fw_enabled;
 
@@ -303,7 +302,6 @@ impl CyberFirewallApp {
                 CyberNode::new(p3_2, 110.0, "BACK <<", "3. ADV MENU"),
             ],
             MenuState::SettingsMenu => {
-                let defender_active = s2o_net_lib::defender::DefenderController::is_defender_active();
                 let mut def_node = CyberNode::new(p4_0, 110.0, "DEFENDER", "1. REALTIME SVC");
                 def_node.state = defender_active;
 
@@ -321,6 +319,9 @@ impl Default for CyberFirewallApp {
     fn default() -> Self {
         let (width, height) = load_window_config().unwrap_or((800.0, 600.0));
         let (os_tx, os_rx) = spawn_os_worker();
+        let cached_fw = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
+        let cached_shield = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(false);
+        let cached_def = s2o_net_lib::defender::DefenderController::is_defender_active();
 
         // Bootup Query: Immediately query live Windows Defender Firewall status on startup
         let _ = os_tx.send(OsCommand::QueryStatus);
@@ -329,11 +330,15 @@ impl Default for CyberFirewallApp {
             matrix_rain: MatrixRain::new(width, height),
             ship: CyberShip::new(width),
             lasers: Vec::new(),
-            nodes: Self::load_nodes_for_state(MenuState::MainMenu, width),
+            nodes: Self::load_nodes_for_state(MenuState::MainMenu, width, cached_fw, cached_shield, cached_def),
 
             current_state: MenuState::MainMenu,
             level_title: "MAIN MENU".to_string(),
             status_banner: "[OS BOOTUP VERIFICATION] Synchronizing with Windows Defender Firewall...".to_string(),
+
+            cached_fw_enabled: cached_fw,
+            cached_shield_blocked: cached_shield,
+            cached_defender_active: cached_def,
 
             os_tx,
             os_rx,
@@ -360,6 +365,7 @@ impl epi::App for CyberFirewallApp {
             self.os_sync_ready = true;
             match event {
                 OsStatusEvent::FirewallStatus { enabled, banner } => {
+                    self.cached_fw_enabled = enabled;
                     self.status_banner = banner;
                     for node in self.nodes.iter_mut() {
                         if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
@@ -369,6 +375,7 @@ impl epi::App for CyberFirewallApp {
                     }
                 }
                 OsStatusEvent::ShieldStatus { blocked, banner } => {
+                    self.cached_shield_blocked = blocked;
                     self.status_banner = banner;
                     for node in self.nodes.iter_mut() {
                         if node.label == "SHIELD" {
@@ -378,6 +385,7 @@ impl epi::App for CyberFirewallApp {
                     }
                 }
                 OsStatusEvent::DefenderStatus { active, banner } => {
+                    self.cached_defender_active = active;
                     self.status_banner = banner;
                     for node in self.nodes.iter_mut() {
                         if node.label == "DEFENDER" {
@@ -409,7 +417,13 @@ impl epi::App for CyberFirewallApp {
 
         // Re-calculate target positions in memory immediately during resize
         if (self.last_width - screen_width).abs() > 5.0 || (self.last_height - screen_height).abs() > 5.0 {
-            self.nodes = Self::load_nodes_for_state(self.current_state, screen_width);
+            self.nodes = Self::load_nodes_for_state(
+                self.current_state,
+                screen_width,
+                self.cached_fw_enabled,
+                self.cached_shield_blocked,
+                self.cached_defender_active,
+            );
             self.last_width = screen_width;
             self.last_height = screen_height;
             self.last_resize_time = Some(Instant::now());
@@ -756,8 +770,15 @@ impl epi::App for CyberFirewallApp {
 
             if state_transition {
                 self.lasers.clear();
-                self.nodes = Self::load_nodes_for_state(self.current_state, screen_width);
+                self.nodes = Self::load_nodes_for_state(
+                    self.current_state,
+                    screen_width,
+                    self.cached_fw_enabled,
+                    self.cached_shield_blocked,
+                    self.cached_defender_active,
+                );
                 self.level_flash_timer = Some(Instant::now());
+                let _ = self.os_tx.send(OsCommand::QueryStatus);
             }
         });
 
