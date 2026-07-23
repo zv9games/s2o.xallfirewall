@@ -72,6 +72,9 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
 
                     println!("[OS LINKAGE VERIFIED] Firewall COM result: {:?}, Live OS status: {}", result, live_enabled);
 
+                    // Allow Windows WFP kernel service (mpssvc) 150ms settling time to fully release RPC locks
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+
                     let banner = match result {
                         Ok(_) => format!("[WFP ENGINE] Windows Firewall verified live: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
                         Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Verified live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
@@ -100,6 +103,9 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     }
 
                     println!("[OS LINKAGE VERIFIED] Shield COM result: {:?}, Live OS status: {}", result, live_blocked);
+
+                    // Allow Windows WFP kernel service (mpssvc) 150ms settling time to fully release RPC locks
+                    std::thread::sleep(std::time::Duration::from_millis(150));
 
                     let banner = match result {
                         Ok(_) => format!("[SHIELD] Outbound isolation verified live: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
