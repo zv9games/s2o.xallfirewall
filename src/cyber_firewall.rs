@@ -257,42 +257,89 @@ impl epi::App for CyberFirewallApp {
             // Render Japanese Matrix Rain Code Background
             self.matrix_rain.render(ui);
 
-            // Single Unified Header Title Line (English & Japanese Mix Logo)
+            // Striking Animated Neon Cyber Logo Emblem Banner
             ui.vertical_centered(|ui| {
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
-                ui.horizontal(|ui| {
-                    ui.add_space((screen_width / 2.0 - 200.0).max(10.0));
-                    ui.label(
-                        egui::RichText::new("S2O")
-                            .color(egui::Color32::from_rgb(0, 255, 235))
-                            .size(24.0)
-                            .strong(),
-                    );
-                    ui.label(
-                        egui::RichText::new("【網】")
-                            .color(egui::Color32::from_rgb(255, 60, 100))
-                            .size(24.0)
-                            .strong(),
-                    );
-                    ui.label(
-                        egui::RichText::new("防火壁")
-                            .color(egui::Color32::from_rgb(255, 220, 0))
-                            .size(22.0)
-                            .strong(),
-                    );
-                    ui.label(
-                        egui::RichText::new(&format!(" :: {}", self.level_title))
-                            .color(egui::Color32::from_rgb(0, 230, 255))
-                            .size(16.0)
-                            .strong(),
-                    );
-                });
+                let time = ctx.input().time as f32;
+                let pulse = (time * 2.5).sin() * 0.5 + 0.5; // Smooth 0.0 .. 1.0 color breathing cycle
+
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgba_unmultiplied(8, 16, 30, 225))
+                    .stroke(egui::Stroke::new(
+                        1.8_f32,
+                        egui::Color32::from_rgb(
+                            (0.0 + 40.0 * pulse) as u8,
+                            (220.0 + 35.0 * pulse) as u8,
+                            255,
+                        ),
+                    ))
+                    .rounding(10.0)
+                    .margin(egui::style::Margin::symmetric(20.0, 6.0))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            // Left Laser Flank Accent
+                            ui.label(
+                                egui::RichText::new("━━━◆ ")
+                                    .color(egui::Color32::from_rgb(0, 255, 235))
+                                    .size(15.0)
+                                    .strong(),
+                            );
+
+                            // S2O
+                            ui.label(
+                                egui::RichText::new("S2O")
+                                    .color(egui::Color32::from_rgb(0, 255, 235))
+                                    .size(26.0)
+                                    .strong(),
+                            );
+
+                            // 【網】
+                            ui.label(
+                                egui::RichText::new("【網】")
+                                    .color(egui::Color32::from_rgb(
+                                        255,
+                                        (50.0 + 40.0 * pulse) as u8,
+                                        (90.0 + 30.0 * pulse) as u8,
+                                    ))
+                                    .size(26.0)
+                                    .strong(),
+                            );
+
+                            // 防火壁
+                            ui.label(
+                                egui::RichText::new("防火壁")
+                                    .color(egui::Color32::from_rgb(
+                                        255,
+                                        (210.0 + 45.0 * pulse) as u8,
+                                        (40.0 * pulse) as u8,
+                                    ))
+                                    .size(24.0)
+                                    .strong(),
+                            );
+
+                            // Right Laser Flank Accent
+                            ui.label(
+                                egui::RichText::new(" ◆━━━")
+                                    .color(egui::Color32::from_rgb(0, 255, 235))
+                                    .size(15.0)
+                                    .strong(),
+                            );
+
+                            // Active Sub-Menu Level Tag
+                            ui.label(
+                                egui::RichText::new(&format!(" :: {}", self.level_title))
+                                    .color(egui::Color32::from_rgb(0, 230, 255))
+                                    .size(17.0)
+                                    .strong(),
+                            );
+                        });
+                    });
 
                 ui.add_space(4.0);
                 ui.label(
                     egui::RichText::new(&self.status_banner)
-                        .color(egui::Color32::from_rgb(200, 200, 255))
+                        .color(egui::Color32::from_rgb(200, 215, 255))
                         .size(13.0),
                 );
             });
