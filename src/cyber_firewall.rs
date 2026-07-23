@@ -383,9 +383,15 @@ impl epi::App for CyberFirewallApp {
 
             for (l_idx, laser) in self.lasers.iter().enumerate() {
                 for (idx, node) in self.nodes.iter_mut().enumerate() {
-                    if node.check_collision(laser) && node.can_toggle() {
-                        node.toggle();
+                    if node.check_collision(laser) {
                         hit_laser_index = Some(l_idx);
+
+                        if !node.can_toggle() {
+                            self.status_banner = "[SYSTEM BUSY] Backend change in progress... Cooldown active (1.5s)".to_string();
+                            continue;
+                        }
+
+                        node.toggle();
 
                         match (self.current_state, idx) {
                             // 1. MAIN MENU

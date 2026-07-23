@@ -25,7 +25,7 @@ impl CyberNode {
             label: label.into(),
             sub_label: sub_label.into(),
             last_hit_time: None,
-            cooldown: Duration::from_millis(400),
+            cooldown: Duration::from_millis(1500), // 1.5s safe OS backend toggle cooldown
         }
     }
 
@@ -34,8 +34,16 @@ impl CyberNode {
         let center_y = self.y + self.height / 2.0;
         let painter = ui.painter();
 
-        // Node aura ring based on state
-        let (ring_color, core_color, status_text) = if self.state {
+        let is_cooldown = !self.can_toggle();
+
+        // Node aura ring based on state & cooldown
+        let (ring_color, core_color, status_text) = if is_cooldown {
+            (
+                egui::Color32::from_rgb(255, 200, 50),
+                egui::Color32::from_rgba_unmultiplied(255, 200, 50, 70),
+                "[BUSY]",
+            )
+        } else if self.state {
             (
                 egui::Color32::from_rgb(0, 255, 120),
                 egui::Color32::from_rgba_unmultiplied(0, 255, 120, 60),
