@@ -545,14 +545,12 @@ impl epi::App for CyberFirewallApp {
 
                             // 3. BASIC FIREWALL MENU
                             (MenuState::BasicFirewallMenu, 0) => {
-                                let target_on = !node.state;
-                                node.state = target_on;
+                                let target_on = node.state;
                                 let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
                                 self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Toggle Request (Target: {})...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicFirewallMenu, 1) => {
-                                let target_block = !node.state;
-                                node.state = target_block;
+                                let target_block = node.state;
                                 let _ = self.os_tx.send(OsCommand::ToggleShield(target_block));
                                 self.status_banner = format!("[SHIELD] Transmitting Outbound Isolation Request (Target: {})...", if target_block { "BLOCKED" } else { "ALLOW" });
                             }
@@ -639,13 +637,9 @@ impl epi::App for CyberFirewallApp {
 
                             // 8. SETTINGS MENU
                             (MenuState::SettingsMenu, 0) => {
-                                let live_status = s2o_net_lib::defender::DefenderController::is_defender_active();
-                                node.state = live_status;
-                                if live_status {
-                                    self.status_banner = "[DEFENDER ENGINE] Real-Time Defender Service is RUNNING (Green)".to_string();
-                                } else {
-                                    self.status_banner = "[DEFENDER ENGINE] Real-Time Defender Service is STOPPED (Red)".to_string();
-                                }
+                                let target_on = node.state;
+                                let _ = self.os_tx.send(OsCommand::ToggleDefender(target_on));
+                                self.status_banner = "[DEFENDER ENGINE] Querying Real-Time Defender Status...".to_string();
                             }
                             (MenuState::SettingsMenu, 1) => {
                                 std::thread::spawn(|| {
