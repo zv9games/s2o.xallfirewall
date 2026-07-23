@@ -25,7 +25,7 @@ impl CyberNode {
             label: label.into(),
             sub_label: sub_label.into(),
             last_hit_time: None,
-            cooldown: Duration::from_millis(250), // 250ms rapid fire arcade responsiveness
+            cooldown: Duration::from_millis(150), // 150ms rapid fire arcade responsiveness
         }
     }
 
@@ -34,16 +34,8 @@ impl CyberNode {
         let center_y = self.y + self.height / 2.0;
         let painter = ui.painter();
 
-        let is_cooldown = !self.can_toggle();
-
-        // Node aura ring based on state & cooldown
-        let (ring_color, core_color, status_text) = if is_cooldown {
-            (
-                egui::Color32::from_rgb(255, 200, 50),
-                egui::Color32::from_rgba_unmultiplied(255, 200, 50, 70),
-                "[BUSY]",
-            )
-        } else if self.state {
+        // Node aura ring based on state
+        let (ring_color, core_color, status_text) = if self.state {
             (
                 egui::Color32::from_rgb(0, 255, 120),
                 egui::Color32::from_rgba_unmultiplied(0, 255, 120, 60),
@@ -124,5 +116,9 @@ impl CyberNode {
             return Instant::now().duration_since(last_hit_time) > self.cooldown;
         }
         true
+    }
+
+    pub fn reset_cooldown(&mut self) {
+        self.last_hit_time = None;
     }
 }

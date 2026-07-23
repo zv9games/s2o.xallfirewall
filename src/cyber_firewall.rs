@@ -29,6 +29,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
         while let Ok(cmd) = cmd_rx.recv() {
             match cmd {
                 OsCommand::ToggleFirewall(target_on) => {
+                    println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
                     } else {
@@ -36,6 +37,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     };
 
                     let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                    println!("[DEBUG OS WORKER] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
                     let banner = match result {
                         Ok(_) => format!("[WFP ENGINE] Windows Firewall synced live: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
                         Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
@@ -44,6 +46,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
                 }
                 OsCommand::ToggleShield(target_block) => {
+                    println!("[DEBUG OS WORKER] Received ToggleShield(target_block={})", target_block);
                     let result = if target_block {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
                     } else {
@@ -51,6 +54,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     };
 
                     let live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                    println!("[DEBUG OS WORKER] Shield COM result: {:?}, Verified live OS state: {}", result, live_blocked);
                     let banner = match result {
                         Ok(_) => format!("[SHIELD] Outbound isolation synced live: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
                         Err(e) => format!("[ADMIN REQUIRED] Shield error ({:?}). Live status: {}", e, if live_blocked { "BLOCKED" } else { "ALLOW" }),
@@ -301,6 +305,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
                             node.state = enabled;
+                            node.reset_cooldown();
                         }
                     }
                 }
@@ -309,6 +314,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "SHIELD" {
                             node.state = blocked;
+                            node.reset_cooldown();
                         }
                     }
                 }
@@ -317,6 +323,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "DEFENDER" {
                             node.state = active;
+                            node.reset_cooldown();
                         }
                     }
                 }
@@ -486,7 +493,6 @@ impl epi::App for CyberFirewallApp {
                         hit_laser_index = Some(l_idx);
 
                         if !node.can_toggle() {
-                            self.status_banner = "[SYSTEM BUSY] Backend change in progress... Cooldown active (1.5s)".to_string();
                             continue;
                         }
 
