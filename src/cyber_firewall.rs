@@ -276,7 +276,7 @@ impl epi::App for CyberFirewallApp {
                             .strong(),
                     );
                     ui.label(
-                        egui::RichText::new("防火墙")
+                        egui::RichText::new("防火壁")
                             .color(egui::Color32::from_rgb(255, 220, 0))
                             .size(22.0)
                             .strong(),
