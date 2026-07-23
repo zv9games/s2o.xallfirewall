@@ -10,6 +10,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 
 pub enum OsCommand {
+    QueryStatus,
     ToggleFirewall(bool),
     ToggleShield(bool),
     ToggleDefender(bool),
@@ -33,6 +34,22 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
             }
 
             match cmd {
+                OsCommand::QueryStatus => {
+                    let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
+                    let live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(false);
+                    let live_active = s2o_net_lib::defender::DefenderController::is_defender_active();
+
+                    let banner = format!(
+                        "[OS KERNEL SYNCED] Live Firewall: {} | Shield: {} | Defender: {}",
+                        if live_enabled { "ENABLED" } else { "DISABLED" },
+                        if live_blocked { "BLOCKED" } else { "ALLOW" },
+                        if live_active { "RUNNING" } else { "STOPPED" }
+                    );
+
+                    let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner: banner.clone() });
+                    let _ = event_tx.send(OsStatusEvent::ShieldStatus { blocked: live_blocked, banner: banner.clone() });
+                    let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
+                }
                 OsCommand::ToggleFirewall(target_on) => {
                     println!("[OS LINKAGE] Instant COM mutation: ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
@@ -41,8 +58,18 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::disable_firewall()
                     };
 
-                    // Instant Live OS Kernel Re-Query across all profiles (Private, Public, Domain)
-                    let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                    let mut live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                    if result.is_ok() {
+                        // Poll Windows WFP kernel up to 6 times (25ms interval) until mpssvc commits the state
+                        for _ in 0..6 {
+                            if live_enabled == target_on {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(25));
+                            live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
+                        }
+                    }
+
                     println!("[OS LINKAGE VERIFIED] Firewall COM result: {:?}, Live OS status: {}", result, live_enabled);
 
                     let banner = match result {
@@ -60,8 +87,18 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
                     };
 
-                    // Instant Live OS Kernel Re-Query
-                    let live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                    let mut live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                    if result.is_ok() {
+                        // Poll Windows WFP kernel up to 6 times (25ms interval) until mpssvc commits the state
+                        for _ in 0..6 {
+                            if live_blocked == target_block {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(25));
+                            live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
+                        }
+                    }
+
                     println!("[OS LINKAGE VERIFIED] Shield COM result: {:?}, Live OS status: {}", result, live_blocked);
 
                     let banner = match result {
@@ -279,6 +316,9 @@ impl Default for CyberFirewallApp {
         let (width, height) = load_window_config().unwrap_or((800.0, 600.0));
         let (os_tx, os_rx) = spawn_os_worker();
 
+        // Bootup Query: Immediately query live Windows Defender Firewall status on startup
+        let _ = os_tx.send(OsCommand::QueryStatus);
+
         Self {
             matrix_rain: MatrixRain::new(width, height),
             ship: CyberShip::new(width),
@@ -287,11 +327,11 @@ impl Default for CyberFirewallApp {
 
             current_state: MenuState::MainMenu,
             level_title: "MAIN MENU".to_string(),
-            status_banner: "MAIN MENU: Shoot targets [BASIC], [ADVANCED], [SETTINGS], or [EXIT]!".to_string(),
+            status_banner: "[OS BOOTUP VERIFICATION] Synchronizing with Windows Defender Firewall...".to_string(),
 
             os_tx,
             os_rx,
-            os_sync_ready: true,
+            os_sync_ready: false,
 
             fonts_loaded: false,
             level_flash_timer: None,
