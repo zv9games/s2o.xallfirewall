@@ -62,21 +62,31 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::disable_firewall()
                     };
 
-                    // Strict OS Kernel Confirmation Protocol:
+                    // OS Transaction Verification Protocol:
+                    // Requires 3 CONSECUTIVE verified readings (100ms apart) confirming target_on!
                     let mut live_enabled = false;
-                    for attempt in 1..=20 {
-                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    let mut consecutive_matches = 0;
+
+                    for attempt in 1..=30 {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                         match s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
                             Ok(real_state) => {
                                 live_enabled = real_state;
-                                println!("[DEBUG OS WORKER] Polling attempt {}: real_state={}, target_on={}", attempt, real_state, target_on);
+                                println!("[DEBUG OS WORKER] Verification attempt {}: real_state={}, target_on={}", attempt, real_state, target_on);
                                 if live_enabled == target_on {
-                                    println!("[DEBUG OS WORKER] -> STATE MATCH CONFIRMED on attempt {}!", attempt);
-                                    break;
+                                    consecutive_matches += 1;
+                                    println!("[DEBUG OS WORKER] -> Consecutive OS State Match #{}", consecutive_matches);
+                                    if consecutive_matches >= 3 {
+                                        println!("[DEBUG OS WORKER] -> OS TRANSACTION COMPLETION VERIFIED (3x Consecutive Stable Readings)!");
+                                        break;
+                                    }
+                                } else {
+                                    consecutive_matches = 0;
                                 }
                             }
                             Err(e) => {
-                                println!("[DEBUG OS WORKER] Polling attempt {}: is_firewall_enabled error {:?}", attempt, e);
+                                consecutive_matches = 0;
+                                println!("[DEBUG OS WORKER] Verification attempt {}: error {:?}", attempt, e);
                             }
                         }
                     }
@@ -108,21 +118,30 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
                     };
 
-                    // Strict OS Kernel Confirmation Protocol:
+                    // OS Transaction Verification Protocol:
                     let mut live_blocked = false;
-                    for attempt in 1..=20 {
-                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    let mut consecutive_matches = 0;
+
+                    for attempt in 1..=30 {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                         match s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
                             Ok(real_state) => {
                                 live_blocked = real_state;
-                                println!("[DEBUG OS WORKER] Polling attempt {}: real_state={}, target_block={}", attempt, real_state, target_block);
+                                println!("[DEBUG OS WORKER] Verification attempt {}: real_state={}, target_block={}", attempt, real_state, target_block);
                                 if live_blocked == target_block {
-                                    println!("[DEBUG OS WORKER] -> SHIELD MATCH CONFIRMED on attempt {}!", attempt);
-                                    break;
+                                    consecutive_matches += 1;
+                                    println!("[DEBUG OS WORKER] -> Consecutive Shield State Match #{}", consecutive_matches);
+                                    if consecutive_matches >= 3 {
+                                        println!("[DEBUG OS WORKER] -> SHIELD OS TRANSACTION COMPLETION VERIFIED (3x Consecutive Stable Readings)!");
+                                        break;
+                                    }
+                                } else {
+                                    consecutive_matches = 0;
                                 }
                             }
                             Err(e) => {
-                                println!("[DEBUG OS WORKER] Polling attempt {}: is_outbound_blocked error {:?}", attempt, e);
+                                consecutive_matches = 0;
+                                println!("[DEBUG OS WORKER] Verification attempt {}: error {:?}", attempt, e);
                             }
                         }
                     }

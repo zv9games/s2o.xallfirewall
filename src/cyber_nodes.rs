@@ -119,6 +119,9 @@ impl CyberNode {
     }
 
     pub fn can_toggle(&self) -> bool {
+        if self.is_busy {
+            return false;
+        }
         if let Some(last_hit_time) = self.last_hit_time {
             return Instant::now().duration_since(last_hit_time) > self.cooldown;
         }
