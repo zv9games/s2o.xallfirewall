@@ -54,7 +54,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
                 }
                 OsCommand::ToggleFirewall(target_on) => {
-                    println!("[OS LINKAGE] Instant COM mutation: ToggleFirewall(target_on={})", target_on);
+                    println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
                     } else {
@@ -62,21 +62,25 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     };
 
                     // Strict OS Kernel Confirmation Protocol:
-                    // Poll Windows Defender Firewall kernel up to 20 times (every 40ms, 800ms max)
-                    // NEVER fallback to target_on! Read ONLY real live OS kernel status.
-                    let mut live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(!target_on);
-                    for attempt in 0..20 {
-                        std::thread::sleep(std::time::Duration::from_millis(40));
-                        if let Ok(real_state) = s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
-                            live_enabled = real_state;
-                            if live_enabled == target_on {
-                                println!("[OS LINKAGE CONFIRMED] Windows kernel confirmed state target_on={} on attempt {}", target_on, attempt + 1);
-                                break;
+                    let mut live_enabled = false;
+                    for attempt in 1..=20 {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        match s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
+                            Ok(real_state) => {
+                                live_enabled = real_state;
+                                println!("[DEBUG OS WORKER] Polling attempt {}: real_state={}, target_on={}", attempt, real_state, target_on);
+                                if live_enabled == target_on {
+                                    println!("[DEBUG OS WORKER] -> STATE MATCH CONFIRMED on attempt {}!", attempt);
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                println!("[DEBUG OS WORKER] Polling attempt {}: is_firewall_enabled error {:?}", attempt, e);
                             }
                         }
                     }
 
-                    println!("[OS LINKAGE FINAL] Firewall COM result: {:?}, Verified live OS status: {}", result, live_enabled);
+                    println!("[DEBUG OS WORKER] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
 
                     let banner = match result {
                         Ok(_) => format!("[WFP ENGINE] Windows Firewall kernel confirmed: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
