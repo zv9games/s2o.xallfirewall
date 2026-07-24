@@ -27,6 +27,9 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
     let (event_tx, event_rx) = channel::<OsStatusEvent>();
 
     std::thread::spawn(move || {
+        // Initialize COM ONCE for the entire lifetime of this dedicated worker thread
+        let _persistent_com_guard = unsafe { s2o_net_lib::util1::init_com() };
+
         while let Ok(mut cmd) = cmd_rx.recv() {
             // Rapid-Fire State Coalescing: Collapse rapid-fire commands to execute ONLY the final hit target state
             while let Ok(next_cmd) = cmd_rx.try_recv() {
