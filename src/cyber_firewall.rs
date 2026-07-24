@@ -53,6 +53,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     });
                 }
                 OsCommand::ToggleFirewall(target_on) => {
+                    let start_time = std::time::Instant::now();
                     println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
@@ -89,6 +90,16 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
+                    // Enforce Mandatory OS Transaction Settling Dwell Window (1.5s / 1500ms)
+                    // so WFP kernel & mpssvc complete hardware driver commit BEFORE sending completion event!
+                    let min_dwell = std::time::Duration::from_millis(1500);
+                    let elapsed = start_time.elapsed();
+                    if elapsed < min_dwell {
+                        let remaining = min_dwell - elapsed;
+                        println!("[DEBUG OS WORKER] Holding Busy State for Full OS Settling Window: sleeping remaining {:?}", remaining);
+                        std::thread::sleep(remaining);
+                    }
+
                     println!("[DEBUG OS WORKER] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
 
                     let banner = match result {
@@ -96,10 +107,11 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Verified live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
                     };
 
-                    // Send OS Transaction Completion Event back to UI to flip os_sync_ready flag to true!
+                    // Send OS Transaction Completion Event back to UI to flip node.is_busy to false and os_sync_ready to true!
                     let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
                 }
                 OsCommand::ToggleShield(target_block) => {
+                    let start_time = std::time::Instant::now();
                     println!("[DEBUG OS WORKER] Received ToggleShield(target_block={})", target_block);
                     let result = if target_block {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
@@ -133,6 +145,15 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                                 println!("[DEBUG OS WORKER] Verification attempt {}: error {:?}", attempt, e);
                             }
                         }
+                    }
+
+                    // Enforce Mandatory OS Transaction Settling Dwell Window (1.5s / 1500ms)
+                    let min_dwell = std::time::Duration::from_millis(1500);
+                    let elapsed = start_time.elapsed();
+                    if elapsed < min_dwell {
+                        let remaining = min_dwell - elapsed;
+                        println!("[DEBUG OS WORKER] Holding Busy State for Full OS Settling Window: sleeping remaining {:?}", remaining);
+                        std::thread::sleep(remaining);
                     }
 
                     println!("[DEBUG OS WORKER] Shield COM result: {:?}, Verified live OS status: {}", result, live_blocked);
