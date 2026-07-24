@@ -580,7 +580,8 @@ impl epi::App for CyberFirewallApp {
                         }
 
                         // Hardware Lockout: Toggles occur ONLY when OS sync flag is YES
-                        if (self.current_state == MenuState::BasicFirewallMenu && (idx == 0 || idx == 1))
+                        if (self.current_state == MenuState::BasicMenu && idx == 0)
+                            || (self.current_state == MenuState::BasicFirewallMenu && (idx == 0 || idx == 1))
                             || (self.current_state == MenuState::SettingsMenu && idx == 0)
                         {
                             if !self.os_sync_ready {
@@ -619,10 +620,9 @@ impl epi::App for CyberFirewallApp {
 
                             // 2. BASIC MENU
                             (MenuState::BasicMenu, 0) => {
-                                self.current_state = MenuState::BasicFirewallMenu;
-                                self.level_title = "BASIC FIREWALL CONTROL".to_string();
-                                self.status_banner = "BASIC FIREWALL: Toggle Status, Allow Outbound, or Block All.".to_string();
-                                state_transition = true;
+                                let target_on = !node.state;
+                                let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
+                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicMenu, 1) => {
                                 self.current_state = MenuState::BasicNetworkMenu;
