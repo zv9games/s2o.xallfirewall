@@ -6,6 +6,8 @@ members = [
     "crates/cyberwall-backend-linux",
     "crates/cyberwall-cli",
     "crates/cyberdns",
+    "crates/cybermesh",
+    "crates/cyberdefender",
 ]
 
 [package]
