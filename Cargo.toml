@@ -8,6 +8,9 @@ members = [
     "crates/cyberdns",
     "crates/cybermesh",
     "crates/cyberdefender",
+    "crates/cyberedr",
+    "crates/cybersiem",
+    "crates/cyberintel",
 ]
 
 [package]
