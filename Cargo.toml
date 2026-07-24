@@ -3,7 +3,9 @@ members = [
     ".",
     "crates/cyberwall-core",
     "crates/cyberwall-backend-windows",
+    "crates/cyberwall-backend-linux",
     "crates/cyberwall-cli",
+    "crates/cyberdns",
 ]
 
 [package]

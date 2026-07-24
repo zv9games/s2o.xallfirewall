@@ -1,0 +1,10 @@
+[package]
+name = "cyberwall-backend-linux"
+version = "0.1.0"
+edition = "2021"
+authors = ["Split2ops Software"]
+
+[dependencies]
+async-trait = "0.1"
+tokio = { version = "1.0", features = ["full", "process"] }
+cyberwall-core = { path = "../cyberwall-core" }
