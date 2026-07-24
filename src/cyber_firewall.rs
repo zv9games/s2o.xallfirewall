@@ -54,6 +54,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
                 }
                 OsCommand::ToggleFirewall(target_on) => {
+                    let start_time = std::time::Instant::now();
                     println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
@@ -80,6 +81,15 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
+                    // Enforce Mandatory 750ms OS Settling Dwell Window so WFP kernel & mpssvc complete transaction commit
+                    let min_dwell = std::time::Duration::from_millis(750);
+                    let elapsed = start_time.elapsed();
+                    if elapsed < min_dwell {
+                        let remaining = min_dwell - elapsed;
+                        println!("[DEBUG OS WORKER] Enforcing 750ms OS Settling Dwell Window: sleeping remaining {:?}", remaining);
+                        std::thread::sleep(remaining);
+                    }
+
                     println!("[DEBUG OS WORKER] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
 
                     let banner = match result {
@@ -90,7 +100,8 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
                 }
                 OsCommand::ToggleShield(target_block) => {
-                    println!("[OS LINKAGE] Instant COM mutation: ToggleShield(target_block={})", target_block);
+                    let start_time = std::time::Instant::now();
+                    println!("[DEBUG OS WORKER] Received ToggleShield(target_block={})", target_block);
                     let result = if target_block {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
                     } else {
@@ -98,19 +109,34 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     };
 
                     // Strict OS Kernel Confirmation Protocol:
-                    let mut live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(!target_block);
-                    for attempt in 0..20 {
-                        std::thread::sleep(std::time::Duration::from_millis(40));
-                        if let Ok(real_state) = s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
-                            live_blocked = real_state;
-                            if live_blocked == target_block {
-                                println!("[OS LINKAGE CONFIRMED] Outbound Shield confirmed target_block={} on attempt {}", target_block, attempt + 1);
-                                break;
+                    let mut live_blocked = false;
+                    for attempt in 1..=20 {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        match s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
+                            Ok(real_state) => {
+                                live_blocked = real_state;
+                                println!("[DEBUG OS WORKER] Polling attempt {}: real_state={}, target_block={}", attempt, real_state, target_block);
+                                if live_blocked == target_block {
+                                    println!("[DEBUG OS WORKER] -> SHIELD MATCH CONFIRMED on attempt {}!", attempt);
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                println!("[DEBUG OS WORKER] Polling attempt {}: is_outbound_blocked error {:?}", attempt, e);
                             }
                         }
                     }
 
-                    println!("[OS LINKAGE FINAL] Shield COM result: {:?}, Verified live OS status: {}", result, live_blocked);
+                    // Enforce Mandatory 750ms OS Settling Dwell Window
+                    let min_dwell = std::time::Duration::from_millis(750);
+                    let elapsed = start_time.elapsed();
+                    if elapsed < min_dwell {
+                        let remaining = min_dwell - elapsed;
+                        println!("[DEBUG OS WORKER] Enforcing 750ms OS Settling Dwell Window: sleeping remaining {:?}", remaining);
+                        std::thread::sleep(remaining);
+                    }
+
+                    println!("[DEBUG OS WORKER] Shield COM result: {:?}, Verified live OS status: {}", result, live_blocked);
 
                     let banner = match result {
                         Ok(_) => format!("[SHIELD] Outbound isolation kernel confirmed: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
