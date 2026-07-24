@@ -81,12 +81,12 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory 750ms OS Settling Dwell Window so WFP kernel & mpssvc complete transaction commit
-                    let min_dwell = std::time::Duration::from_millis(750);
+                    // Enforce Mandatory 2.0s (2000ms) OS Settling Dwell Window so WFP kernel & mpssvc complete transaction commit
+                    let min_dwell = std::time::Duration::from_millis(2000);
                     let elapsed = start_time.elapsed();
                     if elapsed < min_dwell {
                         let remaining = min_dwell - elapsed;
-                        println!("[DEBUG OS WORKER] Enforcing 750ms OS Settling Dwell Window: sleeping remaining {:?}", remaining);
+                        println!("[DEBUG OS WORKER] Enforcing Mandatory 2.0s OS Settling Dwell Window: sleeping remaining {:?}", remaining);
                         std::thread::sleep(remaining);
                     }
 
@@ -127,12 +127,12 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory 750ms OS Settling Dwell Window
-                    let min_dwell = std::time::Duration::from_millis(750);
+                    // Enforce Mandatory 2.0s (2000ms) OS Settling Dwell Window
+                    let min_dwell = std::time::Duration::from_millis(2000);
                     let elapsed = start_time.elapsed();
                     if elapsed < min_dwell {
                         let remaining = min_dwell - elapsed;
-                        println!("[DEBUG OS WORKER] Enforcing 750ms OS Settling Dwell Window: sleeping remaining {:?}", remaining);
+                        println!("[DEBUG OS WORKER] Enforcing Mandatory 2.0s OS Settling Dwell Window: sleeping remaining {:?}", remaining);
                         std::thread::sleep(remaining);
                     }
 

@@ -27,7 +27,7 @@ impl CyberNode {
             label: label.into(),
             sub_label: sub_label.into(),
             last_hit_time: None,
-            cooldown: Duration::from_millis(50), // 50ms instant zero-lag hit registration
+            cooldown: Duration::from_millis(2000), // Mandatory 2.0s OS transaction cooldown window
         }
     }
 
