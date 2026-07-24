@@ -54,7 +54,6 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
                 }
                 OsCommand::ToggleFirewall(target_on) => {
-                    let start_time = std::time::Instant::now();
                     println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
                     let result = if target_on {
                         s2o_net_lib::firewall::FirewallController::enable_firewall()
@@ -62,13 +61,13 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::disable_firewall()
                     };
 
-                    // OS Transaction Verification Protocol:
-                    // Requires 3 CONSECUTIVE verified readings (100ms apart) confirming target_on!
+                    // OS Transaction Chain Verification Protocol (Pure Flag-Driven):
+                    // Requires 3 CONSECUTIVE verified readings (50ms apart) confirming target_on from live OS!
                     let mut live_enabled = false;
                     let mut consecutive_matches = 0;
 
                     for attempt in 1..=30 {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        std::thread::sleep(std::time::Duration::from_millis(50));
                         match s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
                             Ok(real_state) => {
                                 live_enabled = real_state;
@@ -91,15 +90,6 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory 2.0s (2000ms) OS Settling Dwell Window so WFP kernel & mpssvc complete transaction commit
-                    let min_dwell = std::time::Duration::from_millis(2000);
-                    let elapsed = start_time.elapsed();
-                    if elapsed < min_dwell {
-                        let remaining = min_dwell - elapsed;
-                        println!("[DEBUG OS WORKER] Enforcing Mandatory 2.0s OS Settling Dwell Window: sleeping remaining {:?}", remaining);
-                        std::thread::sleep(remaining);
-                    }
-
                     println!("[DEBUG OS WORKER] Firewall COM result: {:?}, Verified live OS state: {}", result, live_enabled);
 
                     let banner = match result {
@@ -107,10 +97,10 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Verified live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
                     };
 
+                    // Send OS Transaction Completion Event back to UI to flip os_sync_ready flag to true!
                     let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner });
                 }
                 OsCommand::ToggleShield(target_block) => {
-                    let start_time = std::time::Instant::now();
                     println!("[DEBUG OS WORKER] Received ToggleShield(target_block={})", target_block);
                     let result = if target_block {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_enable()
@@ -118,12 +108,12 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
                     };
 
-                    // OS Transaction Verification Protocol:
+                    // OS Transaction Chain Verification Protocol (Pure Flag-Driven):
                     let mut live_blocked = false;
                     let mut consecutive_matches = 0;
 
                     for attempt in 1..=30 {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        std::thread::sleep(std::time::Duration::from_millis(50));
                         match s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
                             Ok(real_state) => {
                                 live_blocked = real_state;
@@ -146,15 +136,6 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory 2.0s (2000ms) OS Settling Dwell Window
-                    let min_dwell = std::time::Duration::from_millis(2000);
-                    let elapsed = start_time.elapsed();
-                    if elapsed < min_dwell {
-                        let remaining = min_dwell - elapsed;
-                        println!("[DEBUG OS WORKER] Enforcing Mandatory 2.0s OS Settling Dwell Window: sleeping remaining {:?}", remaining);
-                        std::thread::sleep(remaining);
-                    }
-
                     println!("[DEBUG OS WORKER] Shield COM result: {:?}, Verified live OS status: {}", result, live_blocked);
 
                     let banner = match result {
@@ -162,6 +143,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         Err(e) => format!("[ADMIN REQUIRED] Shield error ({:?}). Verified live status: {}", e, if live_blocked { "BLOCKED" } else { "ALLOW" }),
                     };
 
+                    // Send OS Transaction Completion Event back to UI to flip os_sync_ready flag to true!
                     let _ = event_tx.send(OsStatusEvent::ShieldStatus { blocked: live_blocked, banner });
                 }
                 OsCommand::ToggleDefender(_) => {
@@ -286,7 +268,7 @@ struct CyberFirewallApp {
 }
 
 impl CyberFirewallApp {
-    fn load_nodes_for_state(state: MenuState, screen_width: f32, fw_enabled: bool, shield_blocked: bool, defender_active: bool) -> Vec<CyberNode> {
+    fn load_nodes_for_state(state: MenuState, screen_width: f32, fw_enabled: bool, shield_blocked: bool, defender_active: bool, os_sync_ready: bool) -> Vec<CyberNode> {
         let step4 = screen_width / 5.0;
         let p4_0 = step4 * 1.0 - 30.0;
         let p4_1 = step4 * 2.0 - 30.0;
@@ -308,6 +290,7 @@ impl CyberFirewallApp {
             MenuState::BasicMenu => {
                 let mut fw_node = CyberNode::new(p3_0, 110.0, "FIREWALL", "1. WFP CTL");
                 fw_node.state = fw_enabled;
+                fw_node.is_busy = !os_sync_ready;
 
                 let net_node = CyberNode::new(p3_1, 110.0, "NETWORK", "2. TELEMETRY");
                 let back_node = CyberNode::new(p3_2, 110.0, "BACK <<", "3. MAIN MENU");
@@ -317,9 +300,11 @@ impl CyberFirewallApp {
             MenuState::BasicFirewallMenu => {
                 let mut fw_node = CyberNode::new(p3_0, 110.0, "FIREWALL", "1. TOGGLE ON/OFF");
                 fw_node.state = fw_enabled;
+                fw_node.is_busy = !os_sync_ready;
 
                 let mut shield_node = CyberNode::new(p3_1, 110.0, "SHIELD", "2. OUTBOUND BLOCK");
                 shield_node.state = shield_blocked;
+                shield_node.is_busy = !os_sync_ready;
 
                 let back_node = CyberNode::new(p3_2, 110.0, "BACK <<", "3. BASIC MENU");
 
@@ -380,7 +365,7 @@ impl Default for CyberFirewallApp {
             matrix_rain: MatrixRain::new(width, height),
             ship: CyberShip::new(width),
             lasers: Vec::new(),
-            nodes: Self::load_nodes_for_state(MenuState::MainMenu, width, cached_fw, cached_shield, cached_def),
+            nodes: Self::load_nodes_for_state(MenuState::MainMenu, width, cached_fw, cached_shield, cached_def, false),
 
             current_state: MenuState::MainMenu,
             level_title: "MAIN MENU".to_string(),
@@ -476,6 +461,7 @@ impl epi::App for CyberFirewallApp {
                 self.cached_fw_enabled,
                 self.cached_shield_blocked,
                 self.cached_defender_active,
+                self.os_sync_ready,
             );
             self.last_width = screen_width;
             self.last_height = screen_height;
@@ -832,6 +818,7 @@ impl epi::App for CyberFirewallApp {
                     self.cached_fw_enabled,
                     self.cached_shield_blocked,
                     self.cached_defender_active,
+                    self.os_sync_ready,
                 );
                 self.level_flash_timer = Some(Instant::now());
                 let _ = self.os_tx.send(OsCommand::QueryStatus);
