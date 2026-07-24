@@ -62,12 +62,12 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     };
 
                     // OS Transaction Chain Verification Protocol (Pure Flag-Driven):
-                    // Requires 3 CONSECUTIVE verified readings (50ms apart) confirming target_on from live OS!
+                    // Requires 3 CONSECUTIVE verified readings (100ms apart) confirming target_on from live OS!
                     let mut live_enabled = false;
                     let mut consecutive_matches = 0;
 
                     for attempt in 1..=30 {
-                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                         match s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
                             Ok(real_state) => {
                                 live_enabled = real_state;
@@ -90,9 +90,9 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory OS Transaction Settling Dwell Window (1.5s / 1500ms)
+                    // Enforce Mandatory OS Transaction Settling Dwell Window (2.5s / 2500ms)
                     // so WFP kernel & mpssvc complete hardware driver commit BEFORE sending completion event!
-                    let min_dwell = std::time::Duration::from_millis(1500);
+                    let min_dwell = std::time::Duration::from_millis(2500);
                     let elapsed = start_time.elapsed();
                     if elapsed < min_dwell {
                         let remaining = min_dwell - elapsed;
@@ -124,7 +124,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                     let mut consecutive_matches = 0;
 
                     for attempt in 1..=30 {
-                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                         match s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
                             Ok(real_state) => {
                                 live_blocked = real_state;
@@ -147,8 +147,8 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         }
                     }
 
-                    // Enforce Mandatory OS Transaction Settling Dwell Window (1.5s / 1500ms)
-                    let min_dwell = std::time::Duration::from_millis(1500);
+                    // Enforce Mandatory OS Transaction Settling Dwell Window (2.5s / 2500ms)
+                    let min_dwell = std::time::Duration::from_millis(2500);
                     let elapsed = start_time.elapsed();
                     if elapsed < min_dwell {
                         let remaining = min_dwell - elapsed;
