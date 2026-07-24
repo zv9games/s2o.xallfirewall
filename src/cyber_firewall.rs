@@ -61,25 +61,25 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::disable_firewall()
                     };
 
-                    let mut live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
-                    if result.is_ok() {
-                        // Poll Windows WFP kernel up to 6 times (25ms interval) until mpssvc commits the state
-                        for _ in 0..6 {
+                    // Strict OS Kernel Confirmation Protocol:
+                    // Poll Windows Defender Firewall kernel up to 20 times (every 40ms, 800ms max)
+                    // NEVER fallback to target_on! Read ONLY real live OS kernel status.
+                    let mut live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(!target_on);
+                    for attempt in 0..20 {
+                        std::thread::sleep(std::time::Duration::from_millis(40));
+                        if let Ok(real_state) = s2o_net_lib::firewall::FirewallController::is_firewall_enabled() {
+                            live_enabled = real_state;
                             if live_enabled == target_on {
+                                println!("[OS LINKAGE CONFIRMED] Windows kernel confirmed state target_on={} on attempt {}", target_on, attempt + 1);
                                 break;
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(25));
-                            live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(target_on);
                         }
                     }
 
-                    println!("[OS LINKAGE VERIFIED] Firewall COM result: {:?}, Live OS status: {}", result, live_enabled);
-
-                    // Allow Windows WFP kernel service (mpssvc) 150ms settling time to fully release RPC locks
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    println!("[OS LINKAGE FINAL] Firewall COM result: {:?}, Verified live OS status: {}", result, live_enabled);
 
                     let banner = match result {
-                        Ok(_) => format!("[WFP ENGINE] Windows Firewall verified live: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
+                        Ok(_) => format!("[WFP ENGINE] Windows Firewall kernel confirmed: {}", if live_enabled { "ENABLED (Green)" } else { "DISABLED (Red)" }),
                         Err(e) => format!("[ADMIN REQUIRED] Firewall COM error ({:?}). Verified live status: {}", e, if live_enabled { "ENABLED" } else { "DISABLED" }),
                     };
 
@@ -93,25 +93,23 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         s2o_net_lib::firewall::FirewallController::airplane_mode_disable()
                     };
 
-                    let mut live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
-                    if result.is_ok() {
-                        // Poll Windows WFP kernel up to 6 times (25ms interval) until mpssvc commits the state
-                        for _ in 0..6 {
+                    // Strict OS Kernel Confirmation Protocol:
+                    let mut live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(!target_block);
+                    for attempt in 0..20 {
+                        std::thread::sleep(std::time::Duration::from_millis(40));
+                        if let Ok(real_state) = s2o_net_lib::firewall::FirewallController::is_outbound_blocked() {
+                            live_blocked = real_state;
                             if live_blocked == target_block {
+                                println!("[OS LINKAGE CONFIRMED] Outbound Shield confirmed target_block={} on attempt {}", target_block, attempt + 1);
                                 break;
                             }
-                            std::thread::sleep(std::time::Duration::from_millis(25));
-                            live_blocked = s2o_net_lib::firewall::FirewallController::is_outbound_blocked().unwrap_or(target_block);
                         }
                     }
 
-                    println!("[OS LINKAGE VERIFIED] Shield COM result: {:?}, Live OS status: {}", result, live_blocked);
-
-                    // Allow Windows WFP kernel service (mpssvc) 150ms settling time to fully release RPC locks
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    println!("[OS LINKAGE FINAL] Shield COM result: {:?}, Verified live OS status: {}", result, live_blocked);
 
                     let banner = match result {
-                        Ok(_) => format!("[SHIELD] Outbound isolation verified live: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
+                        Ok(_) => format!("[SHIELD] Outbound isolation kernel confirmed: {}", if live_blocked { "OUTBOUND BLOCKED (Red)" } else { "NORMAL ALLOW (Green)" }),
                         Err(e) => format!("[ADMIN REQUIRED] Shield error ({:?}). Verified live status: {}", e, if live_blocked { "BLOCKED" } else { "ALLOW" }),
                     };
 
