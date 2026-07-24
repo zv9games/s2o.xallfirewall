@@ -1,3 +1,11 @@
+[workspace]
+members = [
+    ".",
+    "crates/cyberwall-core",
+    "crates/cyberwall-backend-windows",
+    "crates/cyberwall-cli",
+]
+
 [package]
 name = "xallfirewall"
 version = "0.7.2"
