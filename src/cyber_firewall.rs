@@ -375,6 +375,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
                             node.state = enabled;
+                            node.is_busy = false;
                             node.reset_cooldown();
                         }
                     }
@@ -385,6 +386,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "SHIELD" {
                             node.state = blocked;
+                            node.is_busy = false;
                             node.reset_cooldown();
                         }
                     }
@@ -395,6 +397,7 @@ impl epi::App for CyberFirewallApp {
                     for node in self.nodes.iter_mut() {
                         if node.label == "DEFENDER" {
                             node.state = active;
+                            node.is_busy = false;
                             node.reset_cooldown();
                         }
                     }
@@ -626,8 +629,9 @@ impl epi::App for CyberFirewallApp {
                             // 2. BASIC MENU
                             (MenuState::BasicMenu, 0) => {
                                 let target_on = !node.state;
+                                node.is_busy = true;
                                 let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
-                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
+                                self.status_banner = format!("[OS BUSY] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicMenu, 1) => {
                                 self.current_state = MenuState::BasicNetworkMenu;
@@ -645,13 +649,15 @@ impl epi::App for CyberFirewallApp {
                             // 3. BASIC FIREWALL MENU
                             (MenuState::BasicFirewallMenu, 0) => {
                                 let target_on = !node.state;
+                                node.is_busy = true;
                                 let _ = self.os_tx.send(OsCommand::ToggleFirewall(target_on));
-                                self.status_banner = format!("[WFP ENGINE] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
+                                self.status_banner = format!("[OS BUSY] Transmitting Firewall Request (Target: {})... Waiting for OS declaration...", if target_on { "ENABLED" } else { "DISABLED" });
                             }
                             (MenuState::BasicFirewallMenu, 1) => {
                                 let target_block = !node.state;
+                                node.is_busy = true;
                                 let _ = self.os_tx.send(OsCommand::ToggleShield(target_block));
-                                self.status_banner = format!("[SHIELD] Transmitting Outbound Isolation Request (Target: {})... Waiting for OS declaration...", if target_block { "BLOCKED" } else { "ALLOW" });
+                                self.status_banner = format!("[OS BUSY] Transmitting Outbound Isolation Request (Target: {})... Waiting for OS declaration...", if target_block { "BLOCKED" } else { "ALLOW" });
                             }
                             (MenuState::BasicFirewallMenu, 2) => {
                                 self.current_state = MenuState::BasicMenu;

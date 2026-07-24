@@ -8,6 +8,7 @@ pub struct CyberNode {
     pub width: f32,
     pub height: f32,
     pub state: bool,
+    pub is_busy: bool,
     pub label: String,
     pub sub_label: String,
     pub last_hit_time: Option<Instant>,
@@ -22,6 +23,7 @@ impl CyberNode {
             width: 60.0,
             height: 60.0,
             state: false,
+            is_busy: false,
             label: label.into(),
             sub_label: sub_label.into(),
             last_hit_time: None,
@@ -34,8 +36,14 @@ impl CyberNode {
         let center_y = self.y + self.height / 2.0;
         let painter = ui.painter();
 
-        // Node aura ring based on state
-        let (ring_color, core_color, status_text) = if self.state {
+        // Node aura ring based on state (Busy -> Gold, Active -> Green, Off -> Red)
+        let (ring_color, core_color, status_text) = if self.is_busy {
+            (
+                egui::Color32::from_rgb(255, 200, 0),
+                egui::Color32::from_rgba_unmultiplied(255, 200, 0, 70),
+                "[OS BUSY...]",
+            )
+        } else if self.state {
             (
                 egui::Color32::from_rgb(0, 255, 120),
                 egui::Color32::from_rgba_unmultiplied(0, 255, 120, 60),
