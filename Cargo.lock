@@ -19,6 +19,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
+name = "aegisd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored",
+ "cyberwall-backend-windows",
+ "cyberwall-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,6 +794,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cyberid"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "cyberintel"
 version = "0.1.0"
 dependencies = [
@@ -851,6 +877,18 @@ name = "cyberwall-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "cyberztna"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored",
  "serde",
  "serde_json",
  "tokio",

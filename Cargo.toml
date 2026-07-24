@@ -11,6 +11,9 @@ members = [
     "crates/cyberedr",
     "crates/cybersiem",
     "crates/cyberintel",
+    "crates/cyberid",
+    "crates/cyberztna",
+    "crates/aegisd",
 ]
 
 [package]
