@@ -17,6 +17,7 @@ pub enum OsCommand {
 }
 
 pub enum OsStatusEvent {
+    QuerySync { enabled: bool, blocked: bool, active: bool, banner: String },
     FirewallStatus { enabled: bool, banner: String },
     ShieldStatus { blocked: bool, banner: String },
     DefenderStatus { active: bool, banner: String },
@@ -30,12 +31,7 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
         // Initialize COM ONCE for the entire lifetime of this dedicated worker thread
         let _persistent_com_guard = unsafe { s2o_net_lib::util1::init_com() };
 
-        while let Ok(mut cmd) = cmd_rx.recv() {
-            // Rapid-Fire State Coalescing: Collapse rapid-fire commands to execute ONLY the final hit target state
-            while let Ok(next_cmd) = cmd_rx.try_recv() {
-                cmd = next_cmd;
-            }
-
+        while let Ok(cmd) = cmd_rx.recv() {
             match cmd {
                 OsCommand::QueryStatus => {
                     let live_enabled = s2o_net_lib::firewall::FirewallController::is_firewall_enabled().unwrap_or(true);
@@ -49,9 +45,12 @@ fn spawn_os_worker() -> (Sender<OsCommand>, Receiver<OsStatusEvent>) {
                         if live_active { "RUNNING" } else { "STOPPED" }
                     );
 
-                    let _ = event_tx.send(OsStatusEvent::FirewallStatus { enabled: live_enabled, banner: banner.clone() });
-                    let _ = event_tx.send(OsStatusEvent::ShieldStatus { blocked: live_blocked, banner: banner.clone() });
-                    let _ = event_tx.send(OsStatusEvent::DefenderStatus { active: live_active, banner });
+                    let _ = event_tx.send(OsStatusEvent::QuerySync {
+                        enabled: live_enabled,
+                        blocked: live_blocked,
+                        active: live_active,
+                        banner,
+                    });
                 }
                 OsCommand::ToggleFirewall(target_on) => {
                     println!("[DEBUG OS WORKER] Received ToggleFirewall(target_on={})", target_on);
@@ -397,11 +396,31 @@ impl epi::App for CyberFirewallApp {
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
         // Drain any incoming verified live OS status events from the async worker channel
         while let Ok(event) = self.os_rx.try_recv() {
-            self.os_sync_ready = true;
             match event {
+                OsStatusEvent::QuerySync { enabled, blocked, active, banner } => {
+                    self.cached_fw_enabled = enabled;
+                    self.cached_shield_blocked = blocked;
+                    self.cached_defender_active = active;
+                    self.status_banner = banner;
+                    for node in self.nodes.iter_mut() {
+                        if !node.is_busy {
+                            if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
+                                node.state = enabled;
+                            } else if node.label == "SHIELD" {
+                                node.state = blocked;
+                            } else if node.label == "DEFENDER" {
+                                node.state = active;
+                            }
+                        }
+                    }
+                    if !self.nodes.iter().any(|n| n.is_busy) {
+                        self.os_sync_ready = true;
+                    }
+                }
                 OsStatusEvent::FirewallStatus { enabled, banner } => {
                     self.cached_fw_enabled = enabled;
                     self.status_banner = banner;
+                    self.os_sync_ready = true;
                     for node in self.nodes.iter_mut() {
                         if node.label == "FIREWALL" || node.label == "ADV FIREWALL" {
                             node.state = enabled;
@@ -413,6 +432,7 @@ impl epi::App for CyberFirewallApp {
                 OsStatusEvent::ShieldStatus { blocked, banner } => {
                     self.cached_shield_blocked = blocked;
                     self.status_banner = banner;
+                    self.os_sync_ready = true;
                     for node in self.nodes.iter_mut() {
                         if node.label == "SHIELD" {
                             node.state = blocked;
@@ -424,6 +444,7 @@ impl epi::App for CyberFirewallApp {
                 OsStatusEvent::DefenderStatus { active, banner } => {
                     self.cached_defender_active = active;
                     self.status_banner = banner;
+                    self.os_sync_ready = true;
                     for node in self.nodes.iter_mut() {
                         if node.label == "DEFENDER" {
                             node.state = active;
